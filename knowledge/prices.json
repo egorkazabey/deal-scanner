@@ -11,6 +11,76 @@
  "items": [
   {
    "category": "iphone",
+   "model": "iPhone 11",
+   "variant": "64 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3800,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 11",
+   "variant": "128 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4200,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 12 mini",
+   "variant": "128 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3800,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 12",
+   "variant": "64 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4300,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 12",
+   "variant": "128 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 5000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 12 Pro",
+   "variant": "128 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 6500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 12 Pro Max",
+   "variant": "128 ГБ",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7200,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "iphone",
    "model": "iPhone 13",
    "variant": "128 ГБ",
    "bazos_range": [
@@ -1610,7 +1680,7 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 8300,
-   "liquidity": 2,
+   "liquidity": 3,
    "confidence": "estimate"
   },
   {
@@ -1650,7 +1720,7 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 8500,
-   "liquidity": 2,
+   "liquidity": 3,
    "confidence": "estimate"
   },
   {
@@ -1690,7 +1760,7 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 6500,
-   "liquidity": 2,
+   "liquidity": 3,
    "confidence": "estimate"
   },
   {
@@ -1960,7 +2030,7 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 9500,
-   "liquidity": 3,
+   "liquidity": 2,
    "confidence": "estimate"
   },
   {
@@ -2010,6 +2080,116 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 18000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 9070 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 15000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 9070",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 13000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5070",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 13500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5080",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 25000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4090",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 38000,
+   "liquidity": 1,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5060 Ti",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 9060 XT",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3050",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3200,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3050",
+   "variant": "6 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1080",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1070 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2200,
    "liquidity": 2,
    "confidence": "estimate"
   },

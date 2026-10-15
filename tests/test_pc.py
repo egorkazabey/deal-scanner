@@ -78,7 +78,10 @@ def test_is_pc_build(title, pc):
         ("Ryzen 7 7800X3D", "R7 7800X3D"),
         ("R 5800X", "R7 5700X"),            # not the X3D, it is a different price class
         ("Ryzen 7 7700X", "R5 7600"),       # nearest same generation without X3D
-        ("I3-14100F", "i5-13400F"),         # nearest generation, then the closest model
+        ("I3-14100F", "i5-14400F"),         # same generation, the nearest tier
+        ("i9-14900KF", "i9-14900K"),
+        ("Ryzen 9 7950X3D", "R7 7800X3D"),  # X3D stays X3D
+        ("Ryzen 7 9800X3D", "R7 9800X3D"),
         ("Ryzen 5 1600 AF", "R5 2600"),
     ],
 )
@@ -97,24 +100,25 @@ def test_value_sum_factor_and_ceiling():
     v = value_pc(specs(), COMP, PRICES)
     assert [(p.kind, p.price) for p in v.parts] == [
         ("CPU", 2500), ("GPU", 7500), ("RAM", 1000), ("SSD", 1000), ("MB", 1800), ("PSU", 1100), ("корпус", 1100)]
-    assert (v.parts_sum, v.pc_value, v.market) == (16000, 12800, 12800)
+    assert (v.parts_sum, v.factor, v.pc_value, v.market) == (16000, 1.0, 16000, 16000)
     assert v.flags == [] and not v.low_confidence
     ev = value_pc_listing(evaluate(listing(), PRICES, CFG.pricing, TODAY), specs(), COMP, PRICES, CFG, TODAY).evaluation
     assert ev.is_candidate and ev.match.item.liquidity == 2
-    # > 12 000: min(12 800 × 0.85 = 10 880, 12 800 − 2 000 = 10 800); offer min(9 000 × 0.92, 10 800 × 0.95)
-    assert (ev.max_price, ev.offer_price) == (10800, 8200)
+    # > 12 000: min(16 000 × 0.85 = 13 600, 16 000 − 2 000 = 14 000); offer min(9 000 × 0.92, 13 600 × 0.95)
+    assert (ev.max_price, ev.offer_price) == (13600, 8200)
 
 
 def test_oem_monitor_and_flags():
     v = value_pc(specs(is_oem=True, monitor_included=True, monitor_size_inch=27, monitor_resolution="1440p",
                        monitor_hz=144, psu_quality="noname", psu="Eurocase 600W", ram_modules=1), COMP, PRICES)
     assert v.parts_sum == 15200  # noname PSU 300 instead of 1 100
-    assert v.pc_value == int(15200 * 0.8 * 0.85) == 10336
-    assert v.monitor.price == 3000 and v.monitor.exact and v.market == 13336
+    assert v.pc_value == int(15200 * 1.0 * 0.85) == 12920
+    assert v.monitor.price == 3000 and v.monitor.exact and v.market == 15920
     assert "noname блок питания при видеокарте уровня RTX 3070+" in v.flags
     assert "одноканал (один модуль RAM)" in v.flags
     assert "Монитор 27\" 1440p 144 Hz: +3 000 (полная цена)" in breakdown_lines(v)
-    assert "Сумма 15 200 × 0.8 × OEM −15 % = 10 336" in breakdown_lines(v)
+    assert ("Сумма 15 200 × 1.0 (GPU от уровня RX 6600, CPU от Intel 10 gen / Ryzen 3000) × OEM −15 % = 12 920"
+            in breakdown_lines(v))
 
 
 def test_weak_gpu_with_noname_psu_is_fine():
@@ -122,7 +126,7 @@ def test_weak_gpu_with_noname_psu_is_fine():
     assert not any("noname" in f for f in v.flags)
 
 
-@pytest.mark.parametrize("missing", [{"cpu": ""}, {"gpu": ""}, {"gpu": "RX 9070 XT"}, {"cpu": "Xeon E5-2680"}])
+@pytest.mark.parametrize("missing", [{"cpu": ""}, {"gpu": ""}, {"gpu": "Intel Arc A770"}, {"cpu": "Xeon E5-2680"}])
 def test_no_cpu_or_gpu_is_not_valued(missing):
     v = value_pc(specs(**missing), COMP, PRICES)
     assert v.market is None and v.flags[0].startswith(NO_HARDWARE)
@@ -139,6 +143,32 @@ def test_nearest_sizes_are_low_confidence():
     assert v.low_confidence and v.flags[-1] == "оценка неточная: RAM, SSD"
 
 
+@pytest.mark.parametrize(
+    "change, factor",
+    [
+        ({}, 1.0),                                                  # RTX 3070 + i5-12400F
+        ({"cpu": "i5-9400F"}, 0.9),                                 # 9th gen: not 10+, not before 8th
+        ({"cpu": "Ryzen 5 2600"}, 0.9),                             # Ryzen 2000: not 3000+
+        ({"cpu": "Ryzen 5 3600"}, 1.0),
+        ({"gpu": "RTX 3050 8GB"}, 0.9),                             # below RX 6600
+        ({"gpu": "RX 6600"}, 1.0),                                  # the threshold itself
+        ({"ram_type": "DDR5"}, 1.0),
+        ({"ram_type": "DDR3"}, 0.8),
+        ({"gpu": "GTX 1080 Ti"}, 0.8),                              # GTX 10xx
+        ({"gpu": "RX 580 8GB"}, 0.8),                               # Polaris
+        ({"cpu": "i7-4790"}, 0.8),                                  # before 8th gen
+        ({"cpu": "i7-8700K", "gpu": "GTX 1660 Super"}, 0.9),        # 8th gen counts as mid
+    ],
+)
+def test_pc_factor_classes(change, factor):
+    assert value_pc(specs(**change), COMP, PRICES).factor == factor
+
+
+def test_old_hardware_reason():
+    v = value_pc(specs(cpu="i7-4790", gpu="GTX 1070", ram_type="DDR3"), COMP, PRICES)
+    assert (v.factor, v.factor_reason) == (0.8, "старое железо: DDR3, GTX 1070, CPU 4 gen")
+
+
 # --- three real PCs from Bazoš (tests/fixtures/pc_listings.json, specs as Gemini read them) -----
 
 
@@ -152,20 +182,20 @@ def _real(i):
 def test_real_ryzen_5600x_rtx_2080():
     r = _real(0)  # 15 000 Kč, everything named, EVGA 750W
     assert r.valuation.parts_sum == 2200 + 5500 + 1000 + 1000 + 1800 + 1100 + 1100 == 13700
-    assert r.valuation.pc_value == 10960 and not r.valuation.low_confidence
-    # 5 000 – 12 000: min(10 960 × 0.78 = 8 548, 10 960 − 2 000 (PC) = 8 960) -> 8 500
-    assert (r.evaluation.max_price, r.evaluation.offer_price) == (8500, 8000)
-    assert r.skipped == "low_profit"  # asking 15 000 > value 10 960
+    assert (r.valuation.factor, r.valuation.pc_value) == (1.0, 13700) and not r.valuation.low_confidence
+    # > 12 000: min(13 700 × 0.85 = 11 645, 13 700 − 2 000 = 11 700) -> 11 600; offer 11 600 × 0.95 -> 11 000
+    assert (r.evaluation.max_price, r.evaluation.offer_price) == (11600, 11000)
+    assert r.skipped == "low_profit"  # asking 15 000 > value 13 700
 
 
 def test_real_i5_12400_rtx_3060_with_monitor():
     r = _real(1)  # 17 500 Kč with an MSI 180 Hz Full HD monitor, PSU and RAM type not stated
     v = r.valuation
     assert [p.priced_as for p in v.parts if p.priced_as] == ["≈ i5-12400F", "≈ 16 GB DDR4", "≈ noname"]
-    assert (v.parts_sum, v.pc_value) == (13700, 10960)
-    assert (v.monitor.price, v.market) == (1500, 12460)  # monitor at full price, on top
-    # > 12 000: min(12 460 × 0.85 = 10 591, 12 460 − 2 000 = 10 460) -> 10 400
-    assert (r.evaluation.max_price, r.evaluation.offer_price) == (10400, 9800)
+    assert (v.parts_sum, v.factor, v.pc_value) == (13700, 1.0, 13700)  # RTX 3060 + 12th gen
+    assert (v.monitor.price, v.market) == (1500, 15200)  # monitor at full price, on top
+    # > 12 000: min(15 200 × 0.85 = 12 920, 15 200 − 2 000 = 13 200) -> 12 900; offer 12 900 × 0.95 -> 12 200
+    assert (r.evaluation.max_price, r.evaluation.offer_price) == (12900, 12200)
     assert "оценка неточная: CPU, RAM, PSU, монитор" in v.flags
 
 
@@ -176,9 +206,10 @@ def test_real_i5_9400f_gtx_1650_super():
         ("CPU", 900), ("GPU", 1500), ("RAM", 1000), ("SSD", 500), ("HDD", 300), ("MB", 1800), ("PSU", 300),
         ("корпус", 1100)]
     assert next(p for p in v.parts if p.kind == "GPU").priced_as == "≈ GTX 1650"  # Super not priced: base model
-    assert (v.parts_sum, v.pc_value) == (7400, 5920)
-    # 5 000 – 12 000: min(5 920 × 0.78 = 4 617, 5 920 − 2 000 = 3 920) -> 3 900; offer 3 900 × 0.95 -> 3 700
-    assert (r.evaluation.max_price, r.evaluation.offer_price) == (3900, 3700)
+    assert (v.parts_sum, v.factor, v.pc_value) == (7400, 0.9, 6660)  # GTX 1650 + 9th gen on DDR4: mid
+    assert v.factor_reason == "GPU слабее RX 6600, CPU 9 gen"
+    # 5 000 – 12 000: min(6 660 × 0.78 = 5 194, 6 660 − 2 000 = 4 660) -> 4 600; offer 4 600 × 0.95 -> 4 300
+    assert (r.evaluation.max_price, r.evaluation.offer_price) == (4600, 4300)
 
 
 # --- pipeline ----------------------------------------------------------------------------------
@@ -201,8 +232,8 @@ def test_pipeline_pc_alert_once_and_cached():
     report = _scan(db, [listing()], client)
     [alert] = db.pending_alerts()
     assert alert["text"].startswith("🖥 🟢 <b>ПК i5-12400F / RTX 3070 8GB / 16 GB — 9 000 Kč</b>")
-    assert "Сумма 16 000 × 0.8 = 12 800" in alert["text"]
-    assert "Рынок ~12 800 · предложить 8 200 · максимум 10 800" in alert["text"]
+    assert "Сумма 16 000 × 1.0 (GPU от уровня RX 6600, CPU от Intel 10 gen / Ryzen 3000) = 16 000" in alert["text"]
+    assert "Рынок ~16 000 · предложить 8 200 · максимум 13 600" in alert["text"]
     assert "Byla grafická karta použitá na těžbu?" in alert["text"]
     assert len(client.calls) == 1 and report.pcs[0].skipped is None
     _scan(db, [listing()], client, at=START + timedelta(minutes=10))
