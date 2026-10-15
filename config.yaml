@@ -57,3 +57,17 @@ gemini:
   retries: 4                  # on 429 (per minute) / 5xx / network errors, exponential backoff
   backoff_base: 5             # seconds, doubled per attempt (or the API's retryDelay)
   # Model ids, RPM/RPD/TPM and quota time zone are in .env (GEMINI_*)
+
+notify:
+  max_age_days: 3             # Telegram gets only listings posted in the last 3 days ...
+  price_drop_days: 3          # ... or with a price drop in the last 3 days
+                              # stale listings (> pricing.stale_days) never: only /top, block "залежавшиеся"
+  watch_drop_pct: 5           # "🔁 Снизится — сообщи": alert when the price drops by >= 5 %
+  max_alerts_per_run: 8       # Gemini reviews per run; the rest waits for the next run
+  interval_min: 10            # Bazoš every 10 min ...
+  jitter_s: 90                # ... + random 0-90 s; a run is skipped while the previous one is going
+  quiet_start: "00:30"        # quiet hours (Prague): scan every 30 min, alerts go out in a morning digest
+  quiet_end: "06:30"
+  quiet_interval_min: 30
+  gone_checks_per_run: 5      # "✍️ Написал" listings missing from the scan: detail pages checked per run
+  gone_check_every_min: 60    # each one at most once per hour

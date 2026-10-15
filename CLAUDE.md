@@ -43,13 +43,25 @@ Pipeline (built step by step, see PROMPTS.md):
   to the `pricing_mismatches` table (`reviews` shows them). KNOWLEDGE.md is the system
   instruction. Models and limits: `GEMINI_*` in .env (explicit ids only, no `*-latest`); quota day is
   counted in `GEMINI_QUOTA_TZ` (Pacific Time, resets ~09:00 Prague). Other options: `gemini:` in config.yaml
+- `scanner/pipeline.py`: one scan (`run_scan()`): Bazoš → DB → rules → Gemini → rows in `alerts`.
+  Telegram gets only listings posted ≤ `notify.max_age_days` ago or with a price drop in the last
+  `notify.price_drop_days`; stale ones never (only /top). Also watch alerts ("🔁", drop ≥ 5 %) and
+  "gone" for contacted listings (detail page 404/410). Options: `notify:` in config.yaml
+- `scanner/notify.py`: message texts (HTML), digest splitting
+- `scanner/bot.py`: aiogram 3 bot + APScheduler in one process (`ScannerApp`): scan every 10 min +
+  jitter, quiet hours (scan every 30 min, alerts → morning digest), buttons, commands (`cmd_*` are
+  plain functions). Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
+- `scanner/config_edit.py`: line-level edits of config.yaml (radius, tier pct, searches; validated
+  before writing) and market_price edits in prices.json (logged in `price_changes`)
 - `scanner/__main__.py`: CLI
 - `tests/`: pytest; `tests/fixtures/` holds real Bazoš HTML
 
 ## Commands
 ```
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-python -m scanner run-once --dry        # scan all Bazoš searches, print ranked candidates
+python -m scanner bot                   # Telegram bot + scheduler (the normal way to run it)
+python -m scanner run-once --max-alerts 1  # one scan, alerts go to Telegram right away
+python -m scanner run-once --dry        # scan all Bazoš searches, print ranked candidates and would-be alerts
 python -m scanner run-once --dry --all  # also print matched listings that are not candidates (and why)
 python -m scanner run-once --dry --no-ai # same, without Gemini (--ai-limit N: only top N candidates)
 python -m scanner review --limit 5 --json  # Gemini for top DB candidates, print the JSON verdicts
@@ -59,4 +71,5 @@ python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. 
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 pytest
 ```
-The DB lives in `data/scanner.db` (gitignored). `--dry` still writes to the DB; it only disables notifications.
+The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the
+DB; it stores no alerts and sends nothing.

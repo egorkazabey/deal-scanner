@@ -34,7 +34,9 @@ _CENA_RE = re.compile(r"Cena:\s*([^\n]+)")
 
 
 class BazosError(Exception):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status  # HTTP status of a final non-retryable answer (410 = listing deleted)
 
 
 # --- parsing (pure functions, covered by tests) ---------------------------------------------
@@ -195,7 +197,7 @@ class BazosClient:
                     if resp.status_code < 400:
                         return resp.text
                     if resp.status_code not in RETRY_STATUSES:
-                        raise BazosError(f"GET {url} -> HTTP {resp.status_code}")
+                        raise BazosError(f"GET {url} -> HTTP {resp.status_code}", resp.status_code)
                     error = f"HTTP {resp.status_code}"
                 finally:
                     self._last_request = time.monotonic()

@@ -11,9 +11,11 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
 
+from scanner.bot import ScannerApp, send_pending
 from scanner.config import PROJECT_ROOT, Settings, load_config
-from scanner.db import Database, UpsertKind
+from scanner.db import Database
 from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
+from scanner.pipeline import run_scan
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
 
@@ -23,49 +25,38 @@ console = Console()
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
 
 
-async def run_once(settings: Settings, dry: bool, show_all: bool, ai: bool, ai_limit: int | None) -> None:
+async def run_once(
+    settings: Settings, dry: bool, show_all: bool, ai: bool, ai_limit: int | None, max_alerts: int | None
+) -> None:
+    """One scan through the pipeline; without --dry the alerts go to Telegram right away."""
     cfg = load_config(settings.config_path)
-    prices = PriceList.load(cfg.pricing.prices_path)
     db = Database(settings.db_path)
     try:
         async with BazosClient(cfg.bazos) as client:
-            result = await client.scan()
-
-            labels: dict[tuple[str, str], str] = {}
-            counts = {kind: 0 for kind in UpsertKind}
-            for listing in result.listings:
-                upsert = db.upsert(listing)
-                counts[upsert.kind] += 1
-                if upsert.kind is UpsertKind.NEW:
-                    labels[(listing.source, listing.id)] = "NEW"
-                elif upsert.kind is UpsertKind.PRICE_CHANGED:
-                    labels[(listing.source, listing.id)] = f"{_fmt_price(upsert.old_price)} →"
-                # Keep the description loaded earlier, so the rules see it and no detail is refetched.
-                if listing.description is None and (row := db.get(listing.source, listing.id)):
-                    listing.description = row["description"]
-
-            evaluations = evaluate_many(result.listings, prices, cfg.pricing)
-            _print_evaluations(evaluations, labels, show_all)
-            console.print(
-                f"Fetched {len(result.listings)} unique listings: "
-                f"[green]{counts[UpsertKind.NEW]} new[/], "
-                f"[yellow]{counts[UpsertKind.PRICE_CHANGED]} price changed[/], "
-                f"{counts[UpsertKind.UNCHANGED]} unchanged."
-            )
-            for err in result.errors:
-                console.print(f"[red]error:[/] {err}")
-
-            if ai:
-                candidates = rank(evaluations)[:ai_limit]
-                reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db)
-                reviews = await review_candidates(
-                    candidates, reviewer, db, prices, cfg.pricing, client.fetch_detail
-                )
-                _print_reviews(reviews, reviewer, as_json=False)
+            limit = max_alerts if max_alerts is not None else ai_limit
+            report = await run_scan(settings, cfg, db, client, ai=ai, max_alerts=limit, dry=dry)
+        _print_evaluations(report.evaluations, report.labels, show_all)
+        console.print(
+            f"Fetched {report.listings} unique listings: [green]{report.new} new[/], "
+            f"[yellow]{report.price_changed} price changed[/], "
+            f"{report.listings - report.new - report.price_changed} unchanged; "
+            f"{report.candidates} candidates."
+        )
+        for err in report.errors:
+            console.print(f"[red]error:[/] {err}")
+        if report.reviews:
+            reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, PriceList([]), db)
+            _print_reviews(report.reviews, reviewer, as_json=False)
+        if dry:
+            for text in report.previews:
+                console.rule("[dim]would send[/]")
+                console.print(text, markup=False, highlight=False)
+            console.print(f"[dim]--dry: {len(report.previews)} alerts not sent[/]")
+        else:
+            sent = await send_pending(settings, db)
+            console.print(f"Telegram: {sent} messages sent ({len(report.alerts)} new alerts)")
     finally:
         db.close()
-    if not dry:
-        log.info("Notifications are not implemented yet (Telegram comes in step 4)")
 
 
 async def review_db(
@@ -283,6 +274,10 @@ def main() -> None:
     p_run.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
     p_run.add_argument("--no-ai", action="store_true", help="skip the Gemini second opinion")
     p_run.add_argument("--ai-limit", type=int, default=None, help="Gemini for at most N top candidates")
+    p_run.add_argument("--max-alerts", type=int, default=None,
+                       help="at most N candidates reviewed / alerted (default: notify.max_alerts_per_run)")
+
+    sub.add_parser("bot", help="Telegram bot + scheduler (Bazoš every 10 min)")
 
     p_review = sub.add_parser("review", help="Gemini second opinion for top candidates from the DB")
     p_review.add_argument("--limit", type=int, default=5)
@@ -310,9 +305,14 @@ def main() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("google_genai").setLevel(logging.WARNING)
+    logging.getLogger("aiogram.event").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
     if args.command == "run-once":
-        asyncio.run(run_once(settings, args.dry, args.all, ai=not args.no_ai, ai_limit=args.ai_limit))
+        asyncio.run(run_once(settings, args.dry, args.all, ai=not args.no_ai, ai_limit=args.ai_limit,
+                             max_alerts=args.max_alerts))
+    elif args.command == "bot":
+        asyncio.run(ScannerApp(settings).run())
     elif args.command == "review":
         asyncio.run(review_db(settings, days=args.days, limit=args.limit, ids=args.ids, as_json=args.json, refresh=args.refresh))
     elif args.command == "reviews":

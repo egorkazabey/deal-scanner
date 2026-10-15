@@ -134,10 +134,34 @@ class GeminiConfig(BaseModel):
     backoff_base: float = 5.0  # seconds; doubled per attempt unless the API says how long to wait
 
 
+class NotifyConfig(BaseModel):
+    """Which candidates go to Telegram and when the scheduler runs (times in Europe/Prague)."""
+
+    max_age_days: int = 3  # only listings posted in the last 3 days ...
+    price_drop_days: int = 3  # ... or with a price drop in the last 3 days; stale ones only in /top
+    watch_drop_pct: int = 5  # "🔁 Снизится — сообщи": alert when the price drops by >= 5 %
+    max_alerts_per_run: int = 8  # Gemini reviews per run; the rest waits for the next run
+    interval_min: int = 10  # Bazoš scan interval ...
+    jitter_s: int = 90  # ... plus a random 0-90 s
+    quiet_start: str = "00:30"  # quiet hours: scan every quiet_interval_min, alerts wait for a morning digest
+    quiet_end: str = "06:30"
+    quiet_interval_min: int = 30
+    gone_checks_per_run: int = 5  # "Написал" listings missing from the scan: detail pages checked per run
+    gone_check_every_min: int = 60  # each such listing at most once per hour
+
+    @field_validator("quiet_start", "quiet_end")
+    @classmethod
+    def _hh_mm(cls, value: str) -> str:
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value):
+            raise ValueError(f"{value!r}: use HH:MM")
+        return value
+
+
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
     pricing: PricingConfig = PricingConfig()
     gemini: GeminiConfig = GeminiConfig()
+    notify: NotifyConfig = NotifyConfig()
 
 
 def load_config(path: Path) -> AppConfig:
