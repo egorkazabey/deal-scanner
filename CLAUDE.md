@@ -95,7 +95,7 @@ python -m scanner save-fixtures         # refresh tests/fixtures from live Bazo≈
 python -m scanner price-report          # price proposals from the collected observations (= /prices)
 pytest
 ```
-README.md (Russian) is the user-facing guide: setup, hosting, bot commands, troubleshooting.
+README.md (English) is the user-facing guide: setup, hosting, bot commands, troubleshooting.
 `knowledge/components.json` holds used component prices for PC valuation (not prices.json).
 `data/` is runtime only (the DB; on the host a persistent volume is mounted there and hides its contents), so
 reference files live in `knowledge/`. The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the
