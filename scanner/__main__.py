@@ -15,7 +15,8 @@ from scanner.bot import ScannerApp, send_pending
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
 from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
-from scanner.pipeline import run_scan
+from scanner.pc import breakdown_lines
+from scanner.pipeline import PcResult, run_scan
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
 
@@ -47,6 +48,7 @@ async def run_once(
         if report.reviews:
             reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, PriceList([]), db)
             _print_reviews(report.reviews, reviewer, as_json=False)
+        _print_pcs(report.pcs)
         if dry:
             for text in report.previews:
                 console.rule("[dim]would send[/]")
@@ -156,6 +158,22 @@ def _print_reviews(reviews: list[Review], reviewer: GeminiReviewer, as_json: boo
                 console.print(f"[bold]{rv.evaluation.listing.title}[/]  [dim]{rv.evaluation.listing.url}[/]")
                 console.print_json(rv.verdict.model_dump_json())
     _print_usage(reviewer)
+
+
+def _print_pcs(pcs: list[PcResult]) -> None:
+    """Ready-built PCs of this run: the component calculation or why they were not valued."""
+    for r in pcs:
+        l, ev = r.evaluation.listing, r.evaluation
+        console.rule(f"[bold]{l.title}[/] — {_fmt_price(l.price)} Kč", align="left")
+        console.print(f"[dim]{l.url}[/]")
+        if r.valuation and r.valuation.market is not None:
+            for line in breakdown_lines(r.valuation):
+                console.print("  " + line, markup=False)
+            console.print(f"  Рынок {_fmt_price(ev.market_price)} · max {_fmt_price(ev.max_price)} · "
+                          f"offer {_fmt_price(ev.offer_price)} · score {ev.score}", markup=False)
+        if r.valuation and r.valuation.market is not None and r.valuation.flags:
+            console.print("  флаги: " + "; ".join(r.valuation.flags), markup=False)
+        console.print(f"  [yellow]{r.skipped}[/]" if r.skipped else "  [green]кандидат[/]")
 
 
 def _print_usage(reviewer: GeminiReviewer) -> None:

@@ -22,9 +22,10 @@ from typing import Any
 
 from scanner.config import AppConfig, Settings
 from scanner.db import Database, Status, UpsertKind
-from scanner.gemini import PRAGUE, GeminiReviewer, Review, Verdict, review_candidates
-from scanner.notify import format_alert, format_gone, kc
-from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
+from scanner.gemini import PRAGUE, GeminiReviewer, NoAI, Review, Verdict, review_candidates
+from scanner.notify import format_alert, format_gone, format_pc_alert, kc
+from scanner.pc import Components, PcSpecs, PcValuation, is_pc_build, pc_match, value_pc
+from scanner.pricing import Evaluation, PriceList, evaluate, evaluate_many, normalize, rank
 from scanner.sources.bazos import BazosError
 
 log = logging.getLogger(__name__)
@@ -42,12 +43,28 @@ class RunReport:
     reviews: list[Review] = field(default_factory=list)
     labels: dict[tuple[str, str], str] = field(default_factory=dict)  # NEW / "old price →" for the CLI
     previews: list[str] = field(default_factory=list)  # alert texts of a dry run (not stored, not sent)
+    pcs: list[PcResult] = field(default_factory=list)  # ready-built PCs looked at in this run
 
 
-def notify_kind(ev: Evaluation, db: Database, cfg: AppConfig, now: datetime) -> str | None:
-    """'deal' / 'drop' if the candidate may go to Telegram now, else None."""
+@dataclass
+class PcResult:
+    evaluation: Evaluation  # with the synthetic "Herní PC" match when valued
+    specs: PcSpecs | None = None
+    valuation: PcValuation | None = None
+    skipped: str | None = None  # why it is not valued / not alerted
+
+
+def notify_kind(
+    ev: Evaluation, db: Database, cfg: AppConfig, now: datetime, *, require_candidate: bool = True
+) -> str | None:
+    """'deal' / 'drop' if the candidate may go to Telegram now, else None.
+
+    require_candidate=False: a ready-built PC before its valuation (only age, status and history count).
+    """
     listing = ev.listing
-    if not ev.is_candidate or listing.price is None or "stale" in ev.flags:
+    if listing.price is None or "stale" in ev.flags or ev.stop:
+        return None
+    if require_candidate and not ev.is_candidate:
         return None
     row = db.get(listing.source, listing.id)
     if row and row["status"] in (Status.HIDDEN, Status.CONTACTED):
@@ -159,8 +176,95 @@ async def _scan(
             report.alerts.append(db.add_alert(listing.source, listing.id, listing.price, kind, text, summary,
                                               quiet, started))
 
+    await _pc_alerts(settings, cfg, db, client, evaluations, prices, today, quiet, dry, ai, started, report,
+                     drops, reviewer_factory)
+
     if not dry:
         await _gone_alerts(db, cfg, client, started, quiet, report)
+
+
+def value_pc_listing(
+    ev: Evaluation, specs: PcSpecs, comp: Components, prices: PriceList, cfg: AppConfig, today: date,
+) -> PcResult:
+    """Rules for a PC whose hardware is known: components -> market -> the usual evaluate()."""
+    if not specs.is_pc:
+        return PcResult(ev, specs, skipped="не готовый ПК (по Gemini)")
+    valuation = value_pc(specs, comp, prices)
+    if valuation.market is None:
+        return PcResult(ev, specs, valuation, skipped="; ".join(valuation.flags))
+    pc_ev = evaluate(ev.listing, prices, cfg.pricing, today, match=pc_match(specs, valuation, comp))
+    pc_ev.flags += valuation.flags
+    if specs.scam_risk == "high":
+        pc_ev.is_candidate, pc_ev.score = False, 0
+        return PcResult(pc_ev, specs, valuation, skipped="Gemini: высокий риск мошенничества")
+    if not pc_ev.is_candidate:
+        reasons = [f for f in pc_ev.flags if f in ("low_profit", "too_cheap", "scam_suspect", "shop")]
+        return PcResult(pc_ev, specs, valuation, skipped=", ".join(reasons) or "цена выше 90 % оценки")
+    return PcResult(pc_ev, specs, valuation)
+
+
+def cached_pc_results(
+    evaluations: list[Evaluation], db: Database, prices: PriceList, cfg: AppConfig, today: date,
+) -> list[PcResult]:
+    """PCs whose hardware is already in the DB, valued again without Gemini (for /top)."""
+    comp = Components.load(cfg.pricing.components_path)
+    out = []
+    for ev in evaluations:
+        if ev.match is None and is_pc_build(normalize(ev.listing.title)):
+            row = db.get_pc_specs(ev.listing.source, ev.listing.id)
+            if row:
+                out.append(value_pc_listing(ev, PcSpecs.model_validate_json(row["response"]), comp, prices, cfg, today))
+    return out
+
+
+async def _pc_alerts(
+    settings: Settings, cfg: AppConfig, db: Database, client: Any, evaluations: list[Evaluation],
+    prices: PriceList, today: date, quiet: bool, dry: bool, ai: bool, started: datetime, report: RunReport,
+    drops: dict[tuple[str, str], int], reviewer_factory: Callable[..., GeminiReviewer],
+) -> None:
+    """Ready-built PCs: Gemini reads the hardware (at most notify.pc_specs_per_run new ones), rules price it."""
+    pcs = [ev for ev in evaluations if ev.match is None and ev.listing.price and is_pc_build(normalize(ev.listing.title))]
+    if not pcs:
+        return
+    comp = Components.load(cfg.pricing.components_path)
+    reviewer = reviewer_factory(settings, cfg.gemini, cfg.pricing, prices, db)
+    if not ai:
+        reviewer.disabled_reason = "ИИ выключен для этого прогона"
+    budget = cfg.notify.pc_specs_per_run
+    for ev in pcs:
+        listing = ev.listing
+        key = (listing.source, listing.id)
+        kind = notify_kind(ev, db, cfg, started, require_candidate=False)
+        if kind is None:
+            continue
+        if not db.get_pc_specs(*key):
+            if budget <= 0:
+                report.pcs.append(PcResult(ev, skipped="лимит Gemini для ПК на прогон, в следующий раз"))
+                continue
+            budget -= 1
+            if listing.description is None:
+                try:
+                    detail = await client.fetch_detail(listing.url)
+                except Exception as exc:  # noqa: BLE001 - one broken detail page must not stop the run
+                    log.warning("detail %s failed: %s", listing.url, exc)
+                    continue
+                listing.description = detail.description or ""
+                db.set_description(*key, listing.description)
+        try:
+            specs = await reviewer.extract_pc(listing)
+        except NoAI as exc:
+            report.pcs.append(PcResult(ev, skipped=f"без ИИ железо не прочитать: {exc}"))
+            continue
+        result = value_pc_listing(evaluate(listing, prices, cfg.pricing, today), specs, comp, prices, cfg, today)
+        report.pcs.append(result)
+        if result.skipped:
+            continue
+        text, summary = format_pc_alert(kind, result.evaluation, specs, result.valuation, today,
+                                        drops.get(key) if kind == "drop" else None)
+        if dry:
+            report.previews.append(text)
+            continue
+        report.alerts.append(db.add_alert(*key, listing.price, kind, text, summary, quiet, started))
 
 
 def _watch_alerts(

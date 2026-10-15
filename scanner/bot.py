@@ -28,7 +28,7 @@ from scanner.config import AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE, GeminiReviewer, Verdict
 from scanner.notify import NO_AI_EMOJI, VERDICT_EMOJI, age_words, kc, split_messages
-from scanner.pipeline import run_scan
+from scanner.pipeline import cached_pc_results, run_scan
 from scanner.pricing import PriceList, evaluate_many, max_price_rule_lines, rank
 from scanner.sources.bazos import BazosClient
 
@@ -183,7 +183,9 @@ def cmd_top(cfg: AppConfig, db: Database, now: datetime | None = None, limit: in
         if row and row["status"] == Status.HIDDEN:
             hidden.add((l.source, l.id))
     today = now.date()
-    ranked = [e for e in rank(evaluate_many(listings, prices, cfg.pricing, today))
+    evaluations = evaluate_many(listings, prices, cfg.pricing, today)
+    pcs = [r.evaluation for r in cached_pc_results(evaluations, db, prices, cfg, today) if not r.skipped]
+    ranked = [e for e in sorted(rank(evaluations) + pcs, key=lambda e: e.score, reverse=True)
               if (e.listing.source, e.listing.id) not in hidden]
     active = [e for e in ranked if "stale" not in e.flags][:limit]
     stale = [e for e in ranked if "stale" in e.flags][:stale_limit]

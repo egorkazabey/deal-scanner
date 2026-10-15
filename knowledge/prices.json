@@ -6,7 +6,7 @@
   "buy_rule": "потолок покупки ступенчатый: pricing.max_price_tiers в config.yaml (см. KNOWLEDGE.md, «Правило покупки»)",
   "liquidity": "1 = продаётся медленно, 3 = уходит за несколько дней",
   "confidence": "checked = сверено с живыми объявлениями 12.10.2026; estimate = грубая оценка, сверять вручную",
-  "gaming_pc_rule": "готовые ПК оценивать по сумме б/у комплектующих * 0.8 (целиком продаётся дешевле суммы частей); покупать не дороже потолка по ступеням от этой оценки"
+  "gaming_pc_rule": "готовые ПК оцениваются по компонентам: knowledge/components.json (видеокарты отсюда), см. KNOWLEDGE.md «Оценка готовых ПК»"
  },
  "items": [
   {
@@ -1700,6 +1700,316 @@
    "bazos_range": null,
    "fb_range": null,
    "market_price": 9000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2060",
+   "variant": "6 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2060 Super",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3800,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2070",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4200,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2070 Super",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 5000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2080",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 5500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 2080 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3090",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 14500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3090 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 16000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4060 Ti",
+   "variant": "16 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 9500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4070",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 11500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4070 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 14000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4070 Ti Super",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 16500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4080",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 19000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4080 Super",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 21000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5060 Ti",
+   "variant": "16 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 11000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5070 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 19000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1060",
+   "variant": "6 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 1200,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1070",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1080 Ti",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1650",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 1500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "GTX 1660 Super",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2800,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 580",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 1000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 5700 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 6800",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 6800 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 6900 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 9500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 7600",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 5000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 7700 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 7800 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 10000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 7900 XT",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 14000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 7900 XTX",
+   "variant": "",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 18000,
    "liquidity": 2,
    "confidence": "estimate"
   },

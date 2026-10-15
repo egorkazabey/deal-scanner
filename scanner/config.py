@@ -94,6 +94,7 @@ class MaxPriceTier(BaseModel):
 
 class PricingConfig(BaseModel):
     prices_path: Path = PROJECT_ROOT / "knowledge" / "prices.json"
+    components_path: Path = PROJECT_ROOT / "knowledge" / "components.json"  # used parts, for ready-built PCs
     max_price_tiers: list[MaxPriceTier] = [
         MaxPriceTier(up_to=4999, pct=70, min_margin=1000),
         MaxPriceTier(up_to=12000, pct=78, min_margin=1200),
@@ -141,6 +142,7 @@ class NotifyConfig(BaseModel):
     price_drop_days: int = 3  # ... or with a price drop in the last 3 days; stale ones only in /top
     watch_drop_pct: int = 5  # "🔁 Снизится — сообщи": alert when the price drops by >= 5 %
     max_alerts_per_run: int = 8  # Gemini reviews per run; the rest waits for the next run
+    pc_specs_per_run: int = 5  # ready-built PCs whose hardware Gemini reads per run (cached per listing)
     interval_min: int = 10  # Bazoš scan interval ...
     jitter_s: int = 90  # ... plus a random 0-90 s
     quiet_start: str = "00:30"  # quiet hours: scan every quiet_interval_min, alerts wait for a morning digest
