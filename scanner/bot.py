@@ -24,7 +24,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from scanner import config_edit
-from scanner.config import AppConfig, NotifyConfig, Settings, load_config
+from scanner.config import PROJECT_ROOT, AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE, GeminiReviewer, Verdict
 from scanner.notify import NO_AI_EMOJI, VERDICT_EMOJI, age_words, kc, split_messages
@@ -131,11 +131,34 @@ async def deliver(bot: Bot, db: Database, chat_id: int, quiet: bool) -> int:
 
 
 def _fmt_ts(value: str | None) -> str:
-    return value[5:16].replace("T", " ") if value else "—"
+    """DB timestamps are naive local server time (UTC on the host): show them in Prague time."""
+    if not value:
+        return "—"
+    return datetime.fromisoformat(value).astimezone(PRAGUE).strftime("%d.%m. %H:%M")
+
+
+def code_version() -> str:
+    """Commit of the running code: env from the host (GIT_COMMIT, RENDER_GIT_COMMIT, ...) or .git, else '?'."""
+    for name in ("GIT_COMMIT", "SOURCE_COMMIT", "RENDER_GIT_COMMIT", "RAILWAY_GIT_COMMIT_SHA", "COMMIT_SHA"):
+        if value := os.environ.get(name):
+            return value[:7]
+    head = PROJECT_ROOT / ".git" / "HEAD"
+    try:
+        ref = head.read_text().strip()
+        if ref.startswith("ref: "):
+            ref_file = PROJECT_ROOT / ".git" / ref[5:]
+            if ref_file.exists():
+                return ref_file.read_text().strip()[:7]
+            packed = (PROJECT_ROOT / ".git" / "packed-refs").read_text()
+            return next(l.split()[0][:7] for l in packed.splitlines() if l.endswith(ref[5:]))
+        return ref[:7]
+    except (OSError, StopIteration):
+        return "?"
 
 
 def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datetime | None = None) -> str:
-    lines = ["<b>Статус</b>"]
+    prices = PriceList.load(cfg.pricing.prices_path)
+    lines = ["<b>Статус</b>", f"Версия: {code_version()}, прайс {len(prices.items)} позиций"]
     if db.get_state("paused") == "1":
         lines.append("⏸ на паузе (/resume)")
     runs = db.last_runs(1)
