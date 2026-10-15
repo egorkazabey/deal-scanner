@@ -14,6 +14,8 @@ from scanner.gemini import (
     RateLimiter,
     Verdict,
     build_prompt,
+    enforce_rules,
+    offer_cap,
     quota_day,
     review_candidates,
 )
@@ -107,7 +109,7 @@ def make_reviewer(db, script, *, settings=None, **cfg):
     sleeps = Sleeps()
     reviewer = GeminiReviewer(
         settings or Settings(_env_file=None, gemini_api_key="test"),
-        GeminiConfig(**cfg), PRICING, db, client=client, sleep=sleeps, now=lambda: NOW,
+        GeminiConfig(**cfg), PRICING, PRICES, db, client=client, sleep=sleeps, now=lambda: NOW,
     )
     return reviewer, client, sleeps
 
@@ -243,7 +245,7 @@ def test_server_errors_give_no_ai_review():
 
 def test_no_api_key_means_no_ai():
     db = Database(":memory:")
-    reviewer = GeminiReviewer(Settings(_env_file=None, gemini_api_key=None), GeminiConfig(), PRICING, db)
+    reviewer = GeminiReviewer(Settings(_env_file=None, gemini_api_key=None), GeminiConfig(), PRICING, PRICES, db)
     review = run(reviewer.review(candidate()))
     assert review.verdict is None and review.notify
 
@@ -261,3 +263,105 @@ def test_review_candidates_rechecks_rules_with_description():
     assert review.rules_skip and not review.notify
     assert client.calls == []  # no Gemini request for a listing the rules reject
     assert db.get("bazos", "1")["description"] == "Telefon je blokovaný na iCloud."
+
+
+# --- hard rules after the answer --------------------------------------------------------------
+
+
+def test_offer_capped_at_92_pct_and_message_follows():
+    db = Database(":memory:")
+    ev = candidate()  # price 7 000 -> cap 6 400
+    v = verdict(offer_price=7000, max_price=7900, message_cs="Dobrý den, šlo by to za 7 000 Kč? Děkuji.")
+    reviewer, _, _ = make_reviewer(db, [response(v)])
+    review = run(reviewer.review(ev))
+    assert review.verdict.offer_price == 6400
+    assert "6400 Kč" in review.verdict.message_cs and "7 000" not in review.verdict.message_cs
+    assert review.verdict.max_price == 7900  # max may stay above the asking price
+
+
+@pytest.mark.parametrize("price, cap", [(7000, 6400), (2500, 2300), (15990, 14700), (1000, 900)])
+def test_offer_cap_values(price, cap):
+    assert offer_cap(price) == cap
+
+
+def test_lower_offer_is_kept():
+    ev = candidate()
+    v = enforce_rules(verdict(offer_price=5800, message_cs="Šlo by to za 5800 Kč?"), ev, date(2026, 10, 15))
+    assert v.offer_price == 5800 and v.message_cs == "Šlo by to za 5800 Kč?"
+
+
+def test_stale_big_discount_is_negotiate_with_question():
+    market = PRICES.match("iPhone 15 128GB").item.market_price
+    ev = evaluate(make_listing(price=int(market * 0.55), posted_date=date(2026, 9, 20)), PRICES, PRICING,
+                  today=date(2026, 10, 15))
+    assert ev.is_candidate
+    v = enforce_rules(
+        verdict(offer_price=5000, message_cs="Dobrý den, šlo by to za 5000 Kč při osobním předání?"),
+        ev, date(2026, 10, 15),
+    )
+    assert v.verdict == "negotiate"
+    assert "висит 25 дней: уточни, актуально ли" in v.red_flags
+    assert v.message_cs == "Dobrý den, je inzerát ještě aktuální? Šlo by to za 5000 Kč při osobním předání?"
+    # "je ... ještě k dispozici?" already asks whether the listing is still up
+    asks = "Dobrý den, je iPhone ještě k dispozici? Šlo by to za 5000 Kč?"
+    assert enforce_rules(verdict(offer_price=5000, message_cs=asks), ev, date(2026, 10, 15)).message_cs == asks
+
+
+def test_stale_small_discount_untouched():
+    ev = evaluate(make_listing(price=7000, posted_date=date(2026, 9, 20)), PRICES, PRICING, today=date(2026, 10, 15))
+    v = enforce_rules(verdict(offer_price=6000), ev, date(2026, 10, 15))  # 30 % discount
+    assert v.verdict == "buy" and not v.red_flags
+
+
+def test_prompt_has_dates_and_offer_cap():
+    prompt = build_prompt(candidate(posted_date=date(2026, 10, 1)), PRICING, date(2026, 10, 15))
+    assert '"today": "2026-10-15"' in prompt and '"posted_date": "2026-10-01"' in prompt
+    assert '"age_days": 14' in prompt and '"offer_cap": 6400' in prompt
+
+
+# --- rematch when Gemini disagrees with pricing.py ---------------------------------------------
+
+
+def test_rematch_to_priced_model_makes_one_more_request():
+    db = Database(":memory:")
+    ev = candidate()  # rules: iPhone 15 128 GB, price 7 000
+    wrong = verdict(matches_price_item=False, model="iPhone 15 Pro", variant="128 GB", verdict="skip")
+    right = verdict(model="iPhone 15 Pro", adjusted_market_price=13000, offer_price=6400, max_price=9300)
+    reviewer, client, _ = make_reviewer(db, [response(wrong), response(right)])
+    review = run(reviewer.review(ev))
+    assert len(client.calls) == 2
+    assert review.verdict.verdict == "buy" and review.evaluation.match.item.model.startswith("iPhone 15 Pro")
+    assert review.evaluation.listing.title == "iPhone 15 128GB"  # the real title is kept
+    assert "повторный запрос" in review.rematched
+    [m] = db.mismatches(datetime(2026, 1, 1))
+    assert m["gemini_model"] == "iPhone 15 Pro 128 GB" and m["gemini_item"]
+
+
+def test_rematch_not_a_candidate_is_recomputed_without_request():
+    db = Database(":memory:")
+    ev = candidate()  # 7 000 Kč is no deal for an iPhone 13 128 GB
+    wrong = verdict(matches_price_item=False, model="iPhone 13", variant="128 GB", verdict="skip")
+    reviewer, client, _ = make_reviewer(db, [response(wrong)])
+    review = run(reviewer.review(ev))
+    assert len(client.calls) == 1 and review.verdict.verdict == "skip"
+    assert review.verdict.adjusted_market_price == review.evaluation.market_price
+    assert "без запроса" in review.rematched
+
+
+def test_rematch_model_not_in_price_list_is_skip():
+    db = Database(":memory:")
+    wrong = verdict(matches_price_item=False, model="Samsung Galaxy S23", variant="128 GB", verdict="buy")
+    reviewer, client, _ = make_reviewer(db, [response(wrong)])
+    review = run(reviewer.review(candidate()))
+    assert len(client.calls) == 1 and review.verdict.verdict == "skip" and not review.notify
+    assert "нет в прайсе" in review.rematched
+    assert db.mismatches(datetime(2026, 1, 1))[0]["gemini_item"] is None
+
+
+def test_not_a_device_is_logged_for_pricing():
+    db = Database(":memory:")
+    game = verdict(is_device=False, matches_price_item=False, model="Unrailed (hra)", verdict="buy")
+    reviewer, client, _ = make_reviewer(db, [response(game)])
+    review = run(reviewer.review(candidate()))
+    assert len(client.calls) == 1 and review.verdict.verdict == "skip" and not review.notify
+    assert db.mismatches(datetime(2026, 1, 1))[0]["outcome"] == "не устройство"

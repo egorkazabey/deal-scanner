@@ -90,6 +90,9 @@ class PricingConfig(BaseModel):
     buy_pct_low_liquidity: int = 68  # for liquidity = 1
     max_price_pct: int = 90  # candidate: price <= market * 90 %
     min_price_pct: int = 40  # below that: "too_cheap" (scam or broken), not a candidate
+    stale_days: int = 14  # older listings get the "stale" flag and a score penalty
+    discount_cap_pct: int = 45  # a bigger discount scores no higher (it is more likely a catch)
+    bundle_accessory_pct: int = 50  # extra controllers in a console bundle add this % of their price
     home_cities: list[str] = []  # score bonus +10
     near_cities: list[str] = []  # score bonus +6
 

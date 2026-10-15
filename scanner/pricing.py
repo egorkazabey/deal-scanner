@@ -649,13 +649,34 @@ def stop_reasons(text: str) -> list[str]:
     return reasons
 
 
+# Other devices / brands that are never what we buy (wheels, headsets): accessory anywhere in the title.
+_FOREIGN_RE = re.compile(r"\b(?:volant\w*|wheel|pedal\w*|hori|logitech|thrustmaster|headset\w*)\b")
+# Accessory if mentioned before the device (or with no device): "Sluchátka k iPhone", "Nabíječka iPhone".
+_LEADING_ACC_RE = re.compile(r"\bsluchat\w*|\bkamer\w*|\bcamera\b|\bwebcam\w*|\bnabijec\w*")
+# Accessory if the title has no sign of a console in it: "Dock Nintendo Switch", "FIFA 24 hra PS5".
+# "dockem/docku" (with/in a dock) mean the dock comes with the console, so only bare "dock" counts.
+_CONSOLE_ACC_RE = re.compile(r"\bdock\b|\b(?:hra|hry|hru|her)\b|\bkamer\w*|\bcamera\b")
+_PRICED_CONTROLLERS = {"dualsense", "xbox controller", "switch controller"}
+
+
 def is_accessory(text: str, ident: Identity | None) -> bool:
     if ident and ident.model == "airpods part":  # a charging case / single earbud is a part we price
         return bool(re.search(r"\b(?:obal\w*|kryt\w*|pouzdr\w*) na\b", text))
-    if _ACC_START_RE.search(text):
+    if _ACC_START_RE.search(text) or _FOREIGN_RE.search(text):
         return True
     m = _ACC_FOR_RE.search(text)
-    return bool(m and (ident is None or m.start() <= ident.pos))
+    if m and (ident is None or m.start() <= ident.pos):
+        return True
+    m = _LEADING_ACC_RE.search(text)
+    if m and (ident is None or (m.start() <= ident.pos and ident.category != "airpods")):
+        return True
+    if ident is None or ident.category in {"playstation", "xbox", "nintendo"}:
+        if _CONSOLE_ACC_RE.search(text) and not _CONSOLE_SIGNS_RE.search(text):
+            return True
+        # A lone controller is an accessory unless the price list has it ("DualSense" is priced).
+        if _controller_only(text) and (ident is None or ident.model not in _PRICED_CONTROLLERS):
+            return True
+    return False
 
 
 # --- evaluation ------------------------------------------------------------------------------
@@ -708,11 +729,15 @@ def evaluate(
     if _SHOP_RE.search(full):
         ev.flags.append("shop")
 
+    today = today or date.today()
+    if listing.posted_date and (today - listing.posted_date).days > cfg.stale_days:
+        ev.flags.append("stale")
+
     ev.match = prices.match_identity(ident) if ident else None
     if ev.match is None:
         return ev
     item = ev.match.item
-    market = item.market_price
+    market = item.market_price + bundle_bonus(title, ev.match, prices, cfg)
     pct = cfg.buy_pct_low_liquidity if item.liquidity <= 1 else cfg.buy_pct
     ev.market_price = market
     ev.target_buy = int(round(market * pct / 100, -2))
@@ -741,10 +766,13 @@ def evaluate(
         ev.scam_reasons.append(f"< 55 % рынка + «{m.group(0)}»")
     if ev.scam_reasons:
         ev.flags.append("scam_suspect")
+    if ev.expected_profit < MIN_PROFIT.get(item.category, 1000):
+        ev.flags.append("low_profit")
 
     ev.is_candidate = (
         not ev.stop
         and "accessory" not in ev.flags
+        and "low_profit" not in ev.flags
         and not ev.too_cheap
         and not ev.scam_suspect
         and price <= market * cfg.max_price_pct / 100
@@ -757,7 +785,8 @@ def score(ev: Evaluation, cfg: PricingConfig, today: date | None = None) -> int:
     """0-100: discount 45, liquidity 15, profit 20, distance 10, freshness 10, minus penalties."""
     assert ev.match and ev.discount_pct is not None and ev.expected_profit is not None
     item = ev.match.item
-    pts = 45 * _clamp((ev.discount_pct - 0.10) / 0.35)
+    cap = cfg.discount_cap_pct / 100
+    pts = 45 * _clamp((min(ev.discount_pct, cap) - 0.10) / (cap - 0.10))
     pts += 15 * _clamp((item.liquidity - 1) / 2)
     min_profit = MIN_PROFIT.get(item.category, 1000)
     pts += 20 * _clamp(ev.expected_profit / (min_profit * 4))
@@ -773,9 +802,10 @@ def score(ev: Evaluation, cfg: PricingConfig, today: date | None = None) -> int:
         age = ((today or date.today()) - posted).days
         pts += 10 if age <= 0 else 7 if age == 1 else 4 if age <= 3 else 2 if age <= 7 else 0
 
-    if ev.expected_profit < min_profit:
+    if ev.expected_profit < min_profit * 2:
+        pts -= 5  # barely worth the trip
+    if "stale" in ev.flags:
         pts -= 10
-        ev.flags.append("low_profit")
     if "shop" in ev.flags:
         pts -= 15
     if ev.match.confidence == "low":
@@ -783,6 +813,36 @@ def score(ev: Evaluation, cfg: PricingConfig, today: date | None = None) -> int:
     if item.confidence == "estimate":
         pts *= 0.9
     return int(round(max(0, min(100, pts))))
+
+
+_CONTROLLER_ITEM = {"playstation": "dualsense", "xbox": "xbox controller"}
+_NUMBER_WORDS = {"dva": 2, "dve": 2, "tri": 3, "ctyri": 4}
+
+
+def bundle_bonus(title: str, match: Match, prices: PriceList, cfg: PricingConfig) -> int:
+    """Extra controllers in a console bundle ("PS5 + 2 ovladače") add a share of their price.
+
+    A console comes with one controller, so only the ones above it count. Games and other extras have
+    no price list item and add nothing.
+    """
+    ident = match.identity
+    controller_model = _CONTROLLER_ITEM.get(ident.category)
+    if not controller_model or ident.model in _PRICED_CONTROLLERS or ident.model.endswith("controller"):
+        return 0
+    m = re.search(r"\b(\d|dva|dve|tri|ctyri) ?x? controller", title)
+    if m:
+        count = int(m.group(1)) if m.group(1).isdigit() else _NUMBER_WORDS[m.group(1)]
+    elif re.search(r"\b(?:druhy|dalsi|navic|extra|2 ?\.) controller|\bcontroller (?:navic|extra)\b", title):
+        count = 2
+    else:
+        return 0
+    extra = min(count, 4) - 1
+    controller = prices.match_identity(Identity(ident.category, controller_model))
+    if extra <= 0 or not controller:
+        return 0
+    bonus = int(round(extra * controller.item.market_price * cfg.bundle_accessory_pct / 100, -2))
+    match.notes.append(f"комплект: +{extra} ovladač × {cfg.bundle_accessory_pct} % = +{bonus} Kč")
+    return bonus
 
 
 def _clamp(x: float) -> float:

@@ -51,8 +51,22 @@ CREATE TABLE IF NOT EXISTS gemini_reviews (
     verdict     TEXT NOT NULL,  -- buy / negotiate / skip
     scam_risk   TEXT NOT NULL,  -- low / medium / high
     notify      INTEGER NOT NULL,
+    rematched   TEXT,           -- "rules item → Gemini's item (outcome)" when Gemini disagreed
     created_at  TEXT NOT NULL,
     PRIMARY KEY (source, listing_id, price)
+);
+
+-- Listings where Gemini says pricing.py picked the wrong price list item (to fix pricing.py).
+CREATE TABLE IF NOT EXISTS pricing_mismatches (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source        TEXT NOT NULL,
+    listing_id    TEXT NOT NULL,
+    title         TEXT NOT NULL,
+    rules_item    TEXT NOT NULL,
+    gemini_model  TEXT NOT NULL,
+    gemini_item   TEXT,           -- price list item for Gemini's model; NULL = not in the price list
+    outcome       TEXT NOT NULL,
+    created_at    TEXT NOT NULL
 );
 
 -- Requests and tokens per quota day (in GEMINI_QUOTA_TZ) and model.
@@ -98,6 +112,14 @@ class Database:
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
         self.conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Columns added after a table was first created (CREATE TABLE IF NOT EXISTS won't add them)."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(gemini_reviews)")}
+        if "rematched" not in cols:
+            with self.conn:
+                self.conn.execute("ALTER TABLE gemini_reviews ADD COLUMN rematched TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -189,16 +211,41 @@ class Database:
 
     def save_review(
         self, source: str, listing_id: str, price: int, model: str, response: str,
-        verdict: str, scam_risk: str, notify: bool, now: datetime | None = None,
+        verdict: str, scam_risk: str, notify: bool, rematched: str | None = None,
+        now: datetime | None = None,
     ) -> None:
         ts = (now or datetime.now()).isoformat(timespec="seconds")
         with self.conn:
             self.conn.execute(
-                """INSERT OR REPLACE INTO gemini_reviews
-                       (source, listing_id, price, model, response, verdict, scam_risk, notify, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (source, listing_id, price, model, response, verdict, scam_risk, int(notify), ts),
+                """INSERT OR REPLACE INTO gemini_reviews (source, listing_id, price, model, response,
+                       verdict, scam_risk, notify, rematched, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source, listing_id, price, model, response, verdict, scam_risk, int(notify), rematched, ts),
             )
+
+    def delete_review(self, source: str, listing_id: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "DELETE FROM gemini_reviews WHERE source = ? AND listing_id = ?", (source, listing_id)
+            )
+
+    def log_mismatch(
+        self, source: str, listing_id: str, title: str, rules_item: str, gemini_model: str,
+        gemini_item: str | None, outcome: str, now: datetime | None = None,
+    ) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO pricing_mismatches (source, listing_id, title, rules_item, gemini_model,
+                       gemini_item, outcome, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source, listing_id, title, rules_item, gemini_model, gemini_item, outcome, ts),
+            )
+
+    def mismatches(self, since: datetime) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM pricing_mismatches WHERE created_at >= ? ORDER BY id DESC",
+            (since.isoformat(timespec="seconds"),),
+        ).fetchall()
 
     def reviews(self, since: datetime, only_hidden: bool = False) -> list[sqlite3.Row]:
         """Stored reviews joined with their listing, newest first."""

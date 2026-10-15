@@ -17,7 +17,7 @@ import re
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
@@ -39,20 +39,24 @@ class Verdict(BaseModel):
     """Response schema (passed to Gemini as response_schema)."""
 
     is_device: bool = Field(description="A real device for sale: not an accessory, part, 'koupím' or swap-only")
-    model: str = Field(description="What is actually sold, per title and description")
+    model: str = Field(
+        description="Full model name of what is actually sold, as in the price list "
+        "(e.g. 'Apple Watch Series 10', 'iPhone 15 Pro', 'Nintendo Switch OLED')"
+    )
     variant: str = Field(description="Storage / size / chip / RAM-SSD, as in the price list; '' if unknown")
     matches_price_item: bool = Field(description="Whether the price list item matched by the rules is right")
     condition_notes: list[str] = Field(
-        description="Facts from the listing: battery %, repairs, cracks, accessories, warranty"
+        description="Strictly in Russian (translate, never copy Czech): facts from the listing: "
+        "battery %, repairs, cracks, accessories, warranty"
     )
     adjusted_market_price: int = Field(description="market_price adjusted for condition per KNOWLEDGE.md, CZK")
-    red_flags: list[str]
+    red_flags: list[str] = Field(description="Strictly in Russian, short")
     scam_risk: Literal["low", "medium", "high"]
     verdict: Literal["buy", "negotiate", "skip"]
-    offer_price: int = Field(description="Price for the first message, CZK")
-    max_price: int = Field(description="Do not pay more than this, CZK")
-    reason_ru: str = Field(description="1-2 sentences in Russian")
-    message_cs: str = Field(description="First message to the seller in Czech, formal 'vy', short")
+    offer_price: int = Field(description="Price for the first message, CZK, <= offer_cap from the input")
+    max_price: int = Field(description="Do not pay more than this, CZK (may be above the asking price)")
+    reason_ru: str = Field(description="1-2 sentences, strictly in Russian")
+    message_cs: str = Field(description="First message to the seller in Czech, formal 'vy', short, with offer_price")
 
 
 SYSTEM_PROMPT = """\
@@ -70,15 +74,21 @@ SYSTEM_PROMPT = """\
   по состоянию». Нет данных о состоянии — без поправок. Целое число Kč.
 - max_price: adjusted_market_price × buy_pct / 100, округлить до 100 (если «cena pevná», можно цель + 3 %).
   Прибыль adjusted_market_price − max_price не меньше min_profit.
-- offer_price: на 5–10 % ниже max_price, округлить до 100, и не выше цены объявления.
+- offer_price: на 5–10 % ниже max_price, округлить до 100, но ВСЕГДА не выше offer_cap
+  (92 % от цены объявления), даже если цена объявления уже ниже цели: первое предложение всегда с торгом.
+- max_price может быть выше цены объявления: это значит «если продавец упрётся, бери по его цене».
 - verdict: buy, если цена объявления ≤ max_price; negotiate, если выше max_price, но не больше чем
   на ~15 % и есть признаки торга; иначе skip. При matches_price_item=false, is_device=false или
   scam_risk=high — skip.
 - scam_risk: по разделу «Шаблоны мошенников». Магазин/сервис (IČO, záruka 12M) — это red_flag, не scam.
-- red_flags: конкретно и коротко, по-русски. condition_notes: по-русски, коротко.
-- reason_ru: 1–2 предложения по-русски.
+- Старое объявление: если age_days > 14 и скидка к рынку (rules.discount_pct) > 40 %, то verdict не
+  выше negotiate, в red_flags добавь «висит N дней: уточни, актуально ли» (N = age_days), а message_cs
+  начни с вопроса, актуально ли ещё объявление.
+- Язык: condition_notes, red_flags и reason_ru строго по-русски. Чешские фразы из объявления переводи,
+  не копируй. Коротко.
+- reason_ru: 1–2 предложения.
 - message_cs: первое сообщение продавцу по-чешски, на «vy», 2–3 коротких предложения, по шаблону
-  из базы знаний, с ценой offer_price. Без лишней вежливости и без эмодзи. Для iPhone спроси про
+  из базы знаний, с ценой offer_price (именно это число). Без лишней вежливости и без эмодзи. Для iPhone спроси про
   батарею и сервис, для ПК/видеокарт про модели комплектующих и майнинг, если в описании этого нет.
 
 # База знаний
@@ -95,6 +105,7 @@ class Review:
     cached: bool = False
     no_ai_reason: str | None = None  # set when the candidate goes out "without AI"
     rules_skip: str | None = None  # the candidate failed the rules after the description was loaded
+    rematched: str | None = None  # "rules item → item by Gemini's model" when Gemini disagreed
 
     @property
     def adjusted_market(self) -> int | None:
@@ -160,6 +171,10 @@ class DailyQuotaExceeded(Exception):
     pass
 
 
+class NoAI(Exception):
+    """No Gemini answer for this candidate; the message is the reason shown with "без ИИ"."""
+
+
 def quota_day(tz: str, now: datetime | None = None) -> str:
     """Current quota day: the free tier resets RPD at midnight in `tz` (Pacific Time)."""
     return (now.astimezone(ZoneInfo(tz)) if now else datetime.now(ZoneInfo(tz))).date().isoformat()
@@ -174,17 +189,38 @@ def _is_daily_quota(exc: errors.APIError) -> bool:
     return "PerDay" in json.dumps(exc.details or {})
 
 
+PRAGUE = ZoneInfo("Europe/Prague")
+OFFER_CAP_PCT = 92  # the first offer is always at least 8 % below the asking price
+STALE_DAYS = 14
+STALE_DISCOUNT = 0.40
+
+
+def today_prague() -> date:
+    return datetime.now(PRAGUE).date()
+
+
+def offer_cap(price: int) -> int:
+    """Highest first offer: 92 % of the asking price, rounded down to 100."""
+    return price * OFFER_CAP_PCT // 100 // 100 * 100
+
+
+def age_days(ev: Evaluation, today: date) -> int | None:
+    posted = ev.listing.posted_date
+    return (today - posted).days if posted else None
+
+
 def build_prompt(ev: Evaluation, pricing: PricingConfig, today: date | None = None) -> str:
     """User turn: the matched price list item, the rules' verdict and the listing itself."""
-    assert ev.match and ev.market_price is not None
+    assert ev.match and ev.market_price is not None and ev.listing.price is not None
     item, listing = ev.match.item, ev.listing
+    today = today or today_prague()
     data = {
-        "today": (today or date.today()).isoformat(),
+        "today": today.isoformat(),
         "price_item": {
             "category": item.category,
             "model": item.model,
             "variant": item.variant,
-            "market_price": item.market_price,
+            "market_price": ev.market_price,
             "target_buy": ev.target_buy,
             "buy_pct": pricing.buy_pct_low_liquidity if item.liquidity <= 1 else pricing.buy_pct,
             "min_profit": MIN_PROFIT.get(item.category, 1000),
@@ -203,12 +239,59 @@ def build_prompt(ev: Evaluation, pricing: PricingConfig, today: date | None = No
             "url": listing.url,
             "title": listing.title,
             "price": listing.price,
+            "offer_cap": offer_cap(listing.price),
             "location": listing.location,
             "posted_date": listing.posted_date.isoformat() if listing.posted_date else None,
+            "age_days": age_days(ev, today),
             "description": listing.description or "(описания нет)",
         },
     }
     return json.dumps(data, ensure_ascii=False, indent=1)
+
+
+def _price_re(value: int) -> re.Pattern[str]:
+    """`value` as written in a message: 2500, 2 500, 2.500 (any space-like separator)."""
+    digits = str(value)
+    head, tail = digits[:-3], digits[-3:]
+    if not head:
+        return re.compile(rf"(?<!\d){digits}(?!\d)")
+    return re.compile(rf"(?<!\d){head}[\s  .]?{tail}(?!\d)")
+
+
+def enforce_rules(v: Verdict, ev: Evaluation, today: date) -> Verdict:
+    """Hard rules the model must not break, applied after every answer."""
+    price = ev.listing.price
+    assert price is not None
+    v = v.model_copy(deep=True)
+    if v.verdict != "skip":
+        cap = offer_cap(price)
+        if v.offer_price <= 0 or v.offer_price > cap:
+            old, v.offer_price = v.offer_price, cap
+            if old > 0 and _price_re(old).search(v.message_cs):
+                v.message_cs = _price_re(old).sub(str(cap), v.message_cs, count=1)
+            elif v.message_cs and str(cap) not in v.message_cs:
+                v.message_cs = v.message_cs.rstrip() + f" Šlo by to za {cap} Kč?"
+    age = age_days(ev, today)
+    if age is not None and age > STALE_DAYS and (ev.discount_pct or 0) > STALE_DISCOUNT:
+        if v.verdict == "buy":
+            v.verdict = "negotiate"
+        if not any("висит" in f for f in v.red_flags):
+            v.red_flags.append(f"висит {age} дней: уточни, актуально ли")
+        first_question = v.message_cs.split("?")[0]
+        if v.message_cs and not re.search(r"aktuáln|k dispozici|ještě prodáv", first_question):
+            rest = re.sub(r"^\s*Dobrý den[,!.]?\s*", "", v.message_cs)
+            v.message_cs = f"Dobrý den, je inzerát ještě aktuální? {rest[:1].upper()}{rest[1:]}"
+    return v
+
+
+def rematch(ev: Evaluation, v: Verdict, prices: PriceList, pricing: PricingConfig, today: date) -> Evaluation | None:
+    """Re-evaluate the listing as the device Gemini says it is; None if that model is not priced."""
+    named = replace(ev.listing, title=f"{v.model} {v.variant}".strip())
+    new = evaluate(named, prices, pricing, today)
+    if new.match is None:
+        return None
+    new.listing = ev.listing  # keep the real title for display and the cache
+    return new
 
 
 class GeminiReviewer:
@@ -217,13 +300,14 @@ class GeminiReviewer:
         settings: Settings,
         cfg: GeminiConfig,
         pricing: PricingConfig,
+        prices: PriceList,
         db: Database,
         *,
         client: Any = None,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         now: Callable[[], datetime] = lambda: datetime.now().astimezone(),
     ):
-        self.settings, self.cfg, self.pricing, self.db = settings, cfg, pricing, db
+        self.settings, self.cfg, self.pricing, self.prices, self.db = settings, cfg, pricing, prices, db
         self.models = [m for m in (settings.gemini_model, settings.gemini_fallback_model) if m]
         self._sleep, self._now = sleep, now
         self._limiters = {m: RateLimiter(settings.gemini_rpm, settings.gemini_tpm, sleep=sleep) for m in self.models}
@@ -279,28 +363,93 @@ class GeminiReviewer:
         assert ev.is_candidate and listing.price is not None
         row = self.db.get_review(listing.source, listing.id, listing.price)
         if row:
-            return Review(ev, Verdict.model_validate_json(row["response"]), row["model"], cached=True)
+            return Review(
+                ev, Verdict.model_validate_json(row["response"]), row["model"], cached=True,
+                rematched=row["rematched"],
+            )
         if self.disabled_reason:
             return Review(ev, no_ai_reason=self.disabled_reason)
 
-        prompt = build_prompt(ev, self.pricing, self._now().date())
+        today = self._now().astimezone(PRAGUE).date()
+        try:
+            model, verdict = await self._ask(ev, today)
+        except NoAI as exc:
+            return Review(ev, no_ai_reason=str(exc))
+
+        rematched = None
+        if not verdict.is_device:  # the rules took an accessory / game for a device
+            log.warning("pricing mismatch %s: %r is not a device per Gemini", listing.url, listing.title)
+            self.db.log_mismatch(
+                listing.source, listing.id, listing.title, ev.match.item.label,
+                f"{verdict.model} {verdict.variant}".strip(), None, "не устройство",
+            )
+        elif not verdict.matches_price_item:
+            ev, model, verdict, rematched = await self._rematch(ev, model, verdict, today)
+        if not verdict.matches_price_item or not verdict.is_device:
+            verdict = verdict.model_copy(update={"verdict": "skip"})
+        verdict = enforce_rules(verdict, ev, today)
+
+        review = Review(ev, verdict, model, rematched=rematched)
+        self.db.save_review(
+            listing.source, listing.id, listing.price, model, verdict.model_dump_json(),
+            verdict.verdict, verdict.scam_risk, review.notify, rematched=rematched,
+        )
+        return review
+
+    async def _ask(self, ev: Evaluation, today: date) -> tuple[str, Verdict]:
+        """One answer from the first model with quota left; raises NoAI when there is none."""
+        prompt = build_prompt(ev, self.pricing, today)
         while model := self.available_model():
             try:
-                verdict = await self._call(model, prompt)
+                return model, await self._call(model, prompt)
             except DailyQuotaExceeded:
                 log.warning("Gemini %s: daily quota exceeded, switching model", model)
                 self.db.mark_gemini_exhausted(self.day(), model)
-                continue
             except GeminiUnavailable as exc:
                 log.warning("Gemini unavailable (%s), candidate goes out without AI", exc)
-                return Review(ev, no_ai_reason=f"Gemini недоступен: {exc}")
-            review = Review(ev, verdict, model)
-            self.db.save_review(
-                listing.source, listing.id, listing.price, model, verdict.model_dump_json(),
-                verdict.verdict, verdict.scam_risk, review.notify,
-            )
-            return review
-        return Review(ev, no_ai_reason="дневной лимит Gemini исчерпан")
+                raise NoAI(f"Gemini недоступен: {exc}") from exc
+        raise NoAI("дневной лимит Gemini исчерпан")
+
+    async def _rematch(
+        self, ev: Evaluation, model: str, verdict: Verdict, today: date
+    ) -> tuple[Evaluation, str, Verdict, str]:
+        """Gemini says the rules picked the wrong price list item: retry with the item it names.
+
+        The model is not in the price list -> skip. It is, but the listing is no candidate at that
+        market price -> skip, recomputed without a request. Otherwise one more request.
+        """
+        old_label = ev.match.item.label
+        new_ev = rematch(ev, verdict, self.prices, self.pricing, today)
+        if new_ev is None:
+            outcome, note = None, "модели нет в прайсе"
+        elif new_ev.match.item is ev.match.item:
+            outcome, note = new_ev, "та же позиция прайса"
+        elif not new_ev.is_candidate:
+            outcome, note = new_ev, "пересчитано без запроса: не кандидат"
+            reasons = ", ".join(new_ev.flags) or "цена выше 90 % рынка"
+            verdict = verdict.model_copy(update={
+                "verdict": "skip",
+                "adjusted_market_price": new_ev.market_price,
+                "reason_ru": f"{verdict.reason_ru} По позиции «{new_ev.match.item.label}» "
+                             f"(рынок {new_ev.market_price} Kč) не кандидат: {reasons}.",
+            })
+        else:
+            try:
+                model, verdict = await self._ask(new_ev, today)
+                outcome, note = new_ev, "повторный запрос"
+            except NoAI as exc:
+                outcome, note = None, f"повторный запрос не удался ({exc})"
+        new_label = outcome.match.item.label if outcome else "—"
+        rematched = f"{old_label} → {new_label} ({note})"
+        log.warning(
+            "pricing mismatch %s: %r matched %r, Gemini says %r %r -> %s",
+            ev.listing.url, ev.listing.title, old_label, verdict.model, verdict.variant, rematched,
+        )
+        self.db.log_mismatch(
+            ev.listing.source, ev.listing.id, ev.listing.title, old_label,
+            f"{verdict.model} {verdict.variant}".strip(), new_label if outcome else None, note,
+        )
+        return (outcome or ev), model, verdict, rematched
 
     async def _call(self, model: str, prompt: str) -> Verdict:
         config = types.GenerateContentConfig(
@@ -375,7 +524,7 @@ async def review_candidates(
             else:
                 listing.description = detail.description or ""
                 db.set_description(listing.source, listing.id, listing.description)
-            ev = evaluate(listing, prices, pricing)
+            ev = evaluate(listing, prices, pricing, today_prague())
             if not ev.is_candidate:
                 reasons = ev.flags + [f"stop:{s}" for s in ev.stop] + ev.scam_reasons
                 reviews.append(Review(ev, rules_skip=", ".join(reasons) or "не прошёл правила"))
