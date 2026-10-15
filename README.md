@@ -1,131 +1,141 @@
 # Deal Scanner
 
-Личный сканер выгодных б/у объявлений (iPhone, Apple Watch, AirPods, iPad, MacBook, консоли, видеокарты,
-готовые ПК) на Bazoš в радиусе 60 км от Ústí nad Orlicí. Находит объявления дешевле рынка, проверяет их
-через Gemini и присылает в Telegram готовое сообщение продавцу.
+A personal scanner for underpriced used electronics (iPhone, Apple Watch, AirPods, iPad, MacBook, consoles,
+graphics cards, ready-built PCs) on Bazoš, within 60 km of Ústí nad Orlicí, Czechia. It finds listings
+below market price, gets a second opinion from Gemini and sends them to Telegram with a ready-made
+message for the seller (in Czech).
 
 ```
-Bazoš → SQLite → правила (knowledge/prices.json) → Gemini → Telegram
+Bazoš → SQLite → rules (knowledge/prices.json) → Gemini → Telegram
 ```
 
-## Установка (локально)
+The bot's interface is in Russian; button and command names below are quoted as they appear in the bot.
 
-Нужен Python 3.12+.
+## Setup (local)
+
+Python 3.12+ is required.
 
 ```
 python -m venv .venv
 .venv/bin/pip install -e ".[dev]"      # Windows: .venv\Scripts\pip install -e ".[dev]"
-cp .env.example .env                   # и заполни .env
-python -m scanner run-once --dry       # один прогон без отправки, проверить, что всё работает
-python main.py                         # бот + расписание (то же, что python -m scanner bot)
+cp .env.example .env                   # then fill in .env
+python -m scanner run-once --dry       # one scan without sending anything, to check that it all works
+python main.py                         # bot + scheduler (same as python -m scanner bot)
 ```
 
 ### .env
 
-| Переменная | Что это |
+| Variable | What it is |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | токен от @BotFather |
-| `TELEGRAM_CHAT_ID` | твой chat id: напиши боту `/start`, открой `https://api.telegram.org/bot<TOKEN>/getUpdates`, возьми `chat.id` |
-| `GEMINI_API_KEY` | ключ из aistudio.google.com |
-| `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | точные id моделей (не `*-latest`) |
-| `GEMINI_RPM`, `GEMINI_RPD`, `GEMINI_TPM` | наши лимиты, примерно половина бесплатного тарифа |
+| `TELEGRAM_BOT_TOKEN` | token from @BotFather |
+| `TELEGRAM_CHAT_ID` | your chat id: send the bot `/start`, open `https://api.telegram.org/bot<TOKEN>/getUpdates`, take `chat.id` |
+| `GEMINI_API_KEY` | key from aistudio.google.com |
+| `GEMINI_MODEL`, `GEMINI_FALLBACK_MODEL` | exact model ids (no `*-latest`) |
+| `GEMINI_RPM`, `GEMINI_RPD`, `GEMINI_TPM` | our own limits, about half of the free tier |
 
-Бот отвечает только на `TELEGRAM_CHAT_ID`, остальных молча игнорирует.
+The bot answers only `TELEGRAM_CHAT_ID` and silently ignores everyone else.
 
-## Хостинг
+## Hosting
 
-- Файл запуска: `main.py` (или команда `python main.py`). Сборка: `pip install .`.
-- Тип сервиса: **worker / background**, не web: бот не открывает HTTP-порт.
-- Переменные из таблицы выше задаются в панели хостинга (файла `.env` в репозитории нет).
-- Постоянный диск подключай к `/app/data`: там база `scanner.db` и логи `logs/`. Справочные файлы лежат в
-  `knowledge/`, а не в `data/`, потому что диск закрывает собой содержимое `data/` из репозитория.
-- **После мержа PR нужен передеплой**, сам хостинг может не пересобрать. Проверка: `/status`, строка
-  `Версия: <коммит>, прайс N позиций`, и сообщение «🤖 Бот запущен» после старта.
-- Запускай **один** экземпляр. Два бота с одним токеном мешают друг другу (`Conflict: terminated by other
-  getUpdates request` в логе).
+- Entry file: `main.py` (or the command `python main.py`). Build: `pip install .`.
+- Service type: **worker / background**, not web: the bot opens no HTTP port.
+- Set the variables above in the host's panel (there is no `.env` in the repository).
+- Mount the persistent disk at `/app/data`: it holds the database `scanner.db` and the logs in `logs/`.
+  Reference files live in `knowledge/`, not in `data/`, because the mounted disk hides whatever the
+  repository has in `data/`.
+- **Redeploy after every push to `main`**: the host may not rebuild on its own. To check: `/status` shows
+  `версия <commit> · прайс N позиций`, and the bot sends «🤖 Бот запущен» after each start.
+- Run **one** instance. Two bots with the same token get in each other's way (`Conflict: terminated by
+  other getUpdates request` in the log).
 
-Домашний ПК тоже подойдёт: `python main.py` в автозапуске (Windows: Планировщик заданий, «При входе в
-систему», рабочая папка = папка проекта).
+A home PC works too: `python main.py` on autostart (Windows: Task Scheduler, trigger "At log on", start
+in = the project folder).
 
-## Как работает
+## How it works
 
-- Прогон каждые 10 минут (+ случайно до 90 с), тихие часы 00:30-06:30: раз в 30 минут, уведомления
-  приходят утром одной сводкой.
-- Кандидат: модель есть в прайсе, цена 40-90 % рынка, прибыль от 1 000 Kč (ПК, видеокарты, MacBook от 2 000).
-- Уведомление: только объявления не старше 3 дней или с новым снижением цены. Залежавшиеся (больше
-  14 дней) только в `/top`.
-- Потолок покупки (`максимум`) ступенчатый, первое предложение = min(92 % цены, максимум − 5 %).
-  Правило в `config.yaml` (`pricing.max_price_tiers`) и в `knowledge/KNOWLEDGE.md`.
-- Готовые ПК: Gemini читает железо, цену считает код по `knowledge/components.json` (видеокарты из прайса).
-- Кнопки под уведомлением: «✍️ Написал» (сообщу, если объявление пропадёт), «🙈 Скрыть»,
-  «🔁 Снизится, сообщи» (падение цены от 5 %).
-- Если 30 минут (в тихие часы 60) не было удачного прогона, бот пишет об этом, и ещё раз, когда починится.
+- A scan every 10 minutes (plus a random 0 to 90 s). Quiet hours 00:30 to 06:30: a scan every 30 minutes,
+  alerts are collected into one morning digest.
+- Candidate: the model is in the price list, the price is 40 to 90 % of market, the profit is at least
+  1 000 Kč (2 000 for PCs, graphics cards and MacBooks).
+- Alerts only for listings posted in the last 3 days or with a fresh price drop. Stale listings (older
+  than 14 days) show up only in `/top`.
+- The buy ceiling (`максимум`) is tiered by market price; the first offer is min(92 % of the asking
+  price, ceiling − 5 %). The rule lives in `config.yaml` (`pricing.max_price_tiers`) and in
+  `knowledge/KNOWLEDGE.md`.
+- Ready-built PCs: Gemini reads the hardware, the code prices it from `knowledge/components.json`
+  (graphics cards from the price list).
+- Buttons under an alert: «✍️ Написал» (contacted: the bot tells you if the listing disappears),
+  «🙈 Скрыть» (hide), «🔁 Снизится, сообщи» (tell me if the price drops by 5 % or more).
+- If no scan succeeded for 30 minutes (60 in quiet hours), the bot says so, and again once it recovers.
 
-## Команды бота
+## Bot
 
-Внизу экрана постоянная клавиатура: **📊 Статус, 🏆 Топ, 🚫 Отбраковано, ⚙️ Настройки, ⏯ Пауза / старт,
-📜 Логи**. Разделы открываются одним сообщением, кнопки под ним переключают экраны на месте
-(🔄 Обновить, ⬅️ назад, 🏠 Меню). В топе номер открывает карточку объявления с кнопками
-«Написал / Скрыть / Снизится». В настройках: проценты ступеней кнопками ➖ / ➕, радиус выбором,
-удаление поиска с подтверждением. Список команд виден по кнопке «Меню» слева от поля ввода.
+A persistent keyboard at the bottom: **📊 Статус** (status), **🏆 Топ** (top), **🚫 Отбраковано** (rejected
+by Gemini), **⚙️ Настройки** (settings), **⏯ Пауза / старт** (pause / resume), **📜 Логи** (logs). Each
+section opens as one message and the buttons under it switch screens in place (🔄 refresh, ⬅️ back,
+🏠 menu). In the top list, a number opens the listing's card with the alert buttons. In the settings:
+tier percentages with ➖ / ➕, radius choices, removing a search with a confirmation, and the price
+report. The command list is behind the «Меню» button left of the input field.
 
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `/menu` | главное меню |
-| `/status` | версия, последний прогон, ошибки, лимиты Gemini |
-| `/top` | 10 лучших кандидатов за 24 ч + «залежавшиеся» |
-| `/skipped` | что Gemini отбраковал за 24 ч и почему |
-| `/settings` | потолок покупки, радиус, поиски |
-| `/prices` | отчёт по ценам: что поправить в прайсе (сам приходит по воскресеньям в 19:00) |
-| `/logs` | последние предупреждения и ошибки из лога |
-| `/pause`, `/resume` | остановить / продолжить сканирование |
-| `/pct 2 80` | ступень 2 потолка покупки → 80 % |
-| `/radius 70` | радиус Bazoš, км (любое значение, в меню только готовые) |
-| `/price iphone 15 128 9500` | поправить market_price в прайсе |
-| `/search add mobil galaxy s24 3000 20000`, `/search remove galaxy s24` | поиски |
+| `/menu` | main menu |
+| `/status` | version, last scan, errors, Gemini limits |
+| `/top` | the 10 best candidates of the last 24 h + stale ones |
+| `/skipped` | what Gemini rejected in the last 24 h, and why |
+| `/settings` | buy ceiling, radius, searches, price report |
+| `/prices` | price report: what to adjust in the price list (also sent every Sunday at 19:00) |
+| `/logs` | latest warnings and errors from the log |
+| `/pause`, `/resume` | stop / resume scanning |
+| `/pct 2 80` | tier 2 of the buy ceiling → 80 % |
+| `/radius 70` | Bazoš radius in km (any value; the menu offers presets) |
+| `/price iphone 15 128 9500` | set a market_price in the price list |
+| `/search add mobil galaxy s24 3000 20000`, `/search remove galaxy s24` | searches |
 
-Изменения из бота (`/pct`, `/radius`, `/price`, `/search`, кнопки настроек, применённый отчёт по ценам)
-сохраняются в базе и после передеплоя восстанавливаются, о чём бот пишет в сообщении «🤖 Бот запущен».
-Если то же значение за это время поменяли в репозитории, побеждает репозиторий.
+Changes made in the bot (`/pct`, `/radius`, `/price`, `/search`, settings buttons, an applied price
+report) are stored in the database and restored after a redeploy; the «🤖 Бот запущен» message lists
+what was restored. If the same value was changed in the repository in the meantime, the repository wins.
 
-## Как обновлять прайс
+## Keeping the price list up to date
 
-**Сам по себе (отчёт по ценам).** Бот запоминает цены всех уверенно распознанных объявлений. Если
-объявление пропало из выдачи, он изредка открывает его страницу: «удалено» значит вероятную продажу
-по последней цене. По воскресеньям в 19:00 приходит отчёт по позициям с 5+ объявлениями за 30 дней:
-медиана цен объявлений, медиана «ушло за», текущая цена и предложение (по продажам, если их 3+, иначе
-объявления × 95 %; не больше ±8 % за раз). Позиции с `estimate` идут первыми, в конце модели, которых нет
-в прайсе. Кнопки «✅ Применить всё» и «☑️ Выборочно»; без нажатия ничего не меняется. Настройки: `learn:`
-в `config.yaml`.
+**Automatically (price report).** The bot records the price of every confidently matched listing. When a
+listing leaves the search results, it occasionally opens its page: "deleted" counts as a probable sale
+at the last price. Every Sunday at 19:00 it sends a report for items with 5+ listings in 30 days: median
+asking price, median sale price, current price and a proposal (from sales when there are 3+, otherwise
+asking prices × 95 %; at most ±8 % at a time). Items marked `estimate` come first; models missing from
+the price list are listed at the end. Buttons «✅ Применить всё» (apply all) and «☑️ Выборочно»
+(choose); nothing changes without a tap. Options: `learn:` in `config.yaml`.
 
-**Руками.**
+**By hand.**
 
-- `knowledge/prices.json`: `market_price` (за сколько вещь реально уходит), `liquidity` 1-3,
-  `confidence` (`checked` сверено с объявлениями, `estimate` оценка).
-- `knowledge/components.json`: б/у цены CPU, RAM, дисков, блоков питания, мониторов и коэффициенты для ПК.
-- После правки: `python -m scanner evaluate --all` пересчитает объявления из базы без сети, `pytest`
-  проверит, что всё распознаётся. Потом коммит, PR, мерж, передеплой.
+- `knowledge/prices.json`: `market_price` (what the item actually sells for), `liquidity` 1 to 3,
+  `confidence` (`checked` = verified against listings, `estimate` = rough estimate).
+- `knowledge/components.json`: used prices of CPUs, RAM, drives, power supplies, monitors and the PC
+  factors.
+- After editing: `python -m scanner evaluate --all` re-evaluates the stored listings offline, `pytest`
+  checks that everything is still recognized. Then commit, push to `main`, redeploy.
 
-## Команды CLI
+## CLI
 
 ```
-python -m scanner run-once --dry        # прогон без отправки: кандидаты и что ушло бы в Telegram
-python -m scanner run-once --dry --all  # плюс подошедшие по модели, но не кандидаты (и почему)
-python -m scanner run-once --max-alerts 1  # прогон с отправкой, не больше 1 уведомления
-python -m scanner review --ids 123 --refresh --json  # Gemini по конкретному объявлению
-python -m scanner reviews --skipped     # что Gemini отбраковал, расход Gemini
-python -m scanner evaluate --all        # пересчёт базы после правки прайса
-python -m scanner save-fixtures         # обновить HTML для тестов, если Bazoš поменял вёрстку
+python -m scanner run-once --dry        # scan without sending: candidates and what would go to Telegram
+python -m scanner run-once --dry --all  # plus matched listings that are not candidates (and why)
+python -m scanner run-once --max-alerts 1  # scan and send, at most 1 alert
+python -m scanner review --ids 123 --refresh --json  # Gemini for a specific listing
+python -m scanner reviews --skipped     # what Gemini rejected, Gemini usage
+python -m scanner evaluate --all        # re-evaluate the database after a price list change
+python -m scanner price-report          # the price report (= /prices)
+python -m scanner save-fixtures         # refresh the test HTML when Bazoš changes its layout
 pytest
 ```
 
-## Если что-то не так
+## Troubleshooting
 
-| Симптом | Что смотреть |
+| Symptom | Where to look |
 |---|---|
-| бот молчит на `/start` | бот не запущен (лог хостинга), или неверный `TELEGRAM_CHAT_ID` |
-| «chat not found» в логе | ты не писал боту `/start` с этого аккаунта |
-| уведомлений нет | `/status`: кандидаты есть? `/top`: всё старше 3 дней? `/logs`: ошибки? |
-| новая модель не находится | её нет в прайсе или парсер её не знает (`pytest`, `evaluate --all`) |
-| `FileNotFoundError ... /app/data/...` | файл лежит в `data/`, а там диск хостинга: справочники только в `knowledge/` |
-| пустая выдача Bazoš | поменялась вёрстка: `save-fixtures`, тесты парсера, раздел «Техника парсинга» в KNOWLEDGE.md |
+| the bot ignores `/start` | the bot is not running (host log), or `TELEGRAM_CHAT_ID` is wrong |
+| "chat not found" in the log | you never sent `/start` to the bot from this account |
+| no alerts | `/status`: any candidates? `/top`: everything older than 3 days? `/logs`: errors? |
+| a model is not found | it is not in the price list or the parser does not know it (`pytest`, `evaluate --all`) |
+| `FileNotFoundError ... /app/data/...` | the file is in `data/`, which the host's disk hides: reference files go to `knowledge/` |
+| empty Bazoš results | the layout changed: `save-fixtures`, parser tests, "Техника парсинга" in KNOWLEDGE.md |
