@@ -17,6 +17,8 @@ Pipeline (built step by step, see PROMPTS.md):
 - Be polite to sources: sequential requests only, random 2–5 s pause, retries with backoff.
   Never parallelize requests to Bazoš. Never bypass FB login walls/captchas.
 - Secrets only in `.env` (see `.env.example`); search config in `config.yaml`.
+- Git: commit and push straight to `main` (the owner's standing choice); no feature branches or PRs unless asked.
+  The host deploys from `main`, so run `pytest` before every push.
 
 ## Layout
 - `scanner/config.py`: `Settings` (.env via pydantic-settings) + `load_config()` (config.yaml)
