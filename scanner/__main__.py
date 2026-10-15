@@ -8,13 +8,13 @@ import logging
 from datetime import datetime, timedelta
 
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.table import Table
 
 from scanner.bot import ScannerApp, send_pending
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
 from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
+from scanner.logs import setup_logging
 from scanner.pc import breakdown_lines
 from scanner.pipeline import PcResult, run_scan
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
@@ -316,15 +316,9 @@ def main() -> None:
 
     args = parser.parse_args()
     settings = Settings()
-    logging.basicConfig(
-        level="DEBUG" if args.verbose else settings.log_level,
-        format="%(message)s",
-        handlers=[RichHandler(console=console, show_path=False)],
-    )
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("google_genai").setLevel(logging.WARNING)
-    logging.getLogger("aiogram.event").setLevel(logging.WARNING)
-    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    # Files only for the commands that run unattended or touch the network.
+    log_dir = settings.log_dir if args.command in ("bot", "run-once") else None
+    setup_logging("DEBUG" if args.verbose else settings.log_level, log_dir, console)
 
     if args.command == "run-once":
         asyncio.run(run_once(settings, args.dry, args.all, ai=not args.no_ai, ai_limit=args.ai_limit,

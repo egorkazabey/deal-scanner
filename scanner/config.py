@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     db_path: Path = PROJECT_ROOT / "data" / "scanner.db"
     config_path: Path = PROJECT_ROOT / "config.yaml"
     log_level: str = "INFO"
+    log_dir: Path = PROJECT_ROOT / "data" / "logs"  # scanner.log + errors.log, rotated (persistent volume)
 
     @field_validator("gemini_model", "gemini_fallback_model", mode="before")
     @classmethod
@@ -150,6 +151,8 @@ class NotifyConfig(BaseModel):
     quiet_interval_min: int = 30
     gone_checks_per_run: int = 5  # "Написал" listings missing from the scan: detail pages checked per run
     gone_check_every_min: int = 60  # each such listing at most once per hour
+    health_after_min: int = 30  # no successful scan for this long (2 intervals in quiet hours) -> Telegram
+    startup_message: bool = True  # "🤖 Бот запущен" with the code version after every (re)start
 
     @field_validator("quiet_start", "quiet_end")
     @classmethod

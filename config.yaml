@@ -72,3 +72,5 @@ notify:
   quiet_interval_min: 30
   gone_checks_per_run: 5      # "✍️ Написал" listings missing from the scan: detail pages checked per run
   gone_check_every_min: 60    # each one at most once per hour
+  health_after_min: 30        # no successful scan for 30 min (60 in quiet hours) -> message in Telegram
+  startup_message: true       # "🤖 Бот запущен" with the code version after every (re)start
