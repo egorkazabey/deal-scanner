@@ -25,3 +25,14 @@ bazos:
     - {name: herní pc,        section: pc,    query: "herní pc",        price_min: 5000, price_max: 60000}
     - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 20000}
     - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 20000}
+
+pricing:
+  buy_pct: 72                 # target buy price = market_price * buy_pct / 100
+  buy_pct_low_liquidity: 68   # for items with liquidity = 1
+  max_price_pct: 90           # candidate if price <= 90 % of market ...
+  min_price_pct: 40           # ... and >= 40 % (below: "too_cheap", almost always scam or broken)
+  # Score bonus for distance (names as Bazoš prints them)
+  home_cities: [Ústí nad Orlicí, Česká Třebová, Choceň, Letohrad, Žamberk, Vysoké Mýto, Lanškroun]
+  near_cities: [Pardubice, Hradec Králové, Svitavy, Chrudim, Litomyšl, Rychnov nad Kněžnou, Holice,
+                Polička, Králíky, Náchod, Šumperk, Přelouč, Trutnov, Moravská Třebová, Kostelec nad Orlicí,
+                Dobruška, Jablonné nad Orlicí, Brandýs nad Orlicí]

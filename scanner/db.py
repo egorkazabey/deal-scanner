@@ -132,11 +132,35 @@ class Database:
             "SELECT * FROM listings WHERE source = ? AND id = ?", (source, listing_id)
         ).fetchone()
 
+    def listings(self, seen_since: datetime | None = None) -> list[Listing]:
+        """Stored listings (optionally only those seen since a moment), for offline re-evaluation."""
+        sql, args = "SELECT * FROM listings", ()
+        if seen_since:
+            sql, args = sql + " WHERE last_seen >= ?", (seen_since.isoformat(timespec="seconds"),)
+        return [_row_to_listing(r) for r in self.conn.execute(sql, args).fetchall()]
+
     def price_history(self, source: str, listing_id: str) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT price, seen_at FROM price_history WHERE source = ? AND listing_id = ? ORDER BY id",
             (source, listing_id),
         ).fetchall()
+
+
+def _row_to_listing(r: sqlite3.Row) -> Listing:
+    return Listing(
+        source=r["source"],
+        id=r["id"],
+        url=r["url"],
+        title=r["title"],
+        price=r["price"],
+        location=r["location"],
+        posted_date=date.fromisoformat(r["posted_date"]) if r["posted_date"] else None,
+        description=r["description"],
+        postal_code=r["postal_code"],
+        is_top=bool(r["is_top"]),
+        first_seen=datetime.fromisoformat(r["first_seen"]),
+        last_seen=datetime.fromisoformat(r["last_seen"]),
+    )
 
 
 def _iso(d: date | None) -> str | None:

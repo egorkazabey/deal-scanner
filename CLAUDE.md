@@ -25,14 +25,19 @@ Pipeline (built step by step, see PROMPTS.md):
   `parse_price`), `BazosClient` (polite async httpx client: `scan()`, `fetch_detail()`)
 - `scanner/db.py`: SQLite `listings` (PK source+id, `status` new/alerted/hidden/contacted) and
   `price_history`; `Database.upsert()` returns NEW / PRICE_CHANGED / UNCHANGED
+- `scanner/pricing.py`: rule-based evaluation, no LLM. `normalize()` titles, `identify()` category +
+  model + attrs, `PriceList.match()` (price list items are parsed by the same `identify()`; unreadable
+  model names go to `_ITEM_ALIASES`), `evaluate()` / `evaluate_many()` (metrics, stop words, accessory,
+  too_cheap, scam_suspect, shop, score 0–100), `rank()`. Thresholds and distance bonus: `pricing:` in config.yaml
 - `scanner/__main__.py`: CLI
 - `tests/`: pytest; `tests/fixtures/` holds real Bazoš HTML
 
 ## Commands
 ```
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-python -m scanner run-once --dry        # scan all Bazoš searches, print new / price-changed listings
-python -m scanner run-once --dry --all  # also print already known listings
+python -m scanner run-once --dry        # scan all Bazoš searches, print ranked candidates
+python -m scanner run-once --dry --all  # also print matched listings that are not candidates (and why)
+python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. after editing prices.json)
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 pytest
 ```
