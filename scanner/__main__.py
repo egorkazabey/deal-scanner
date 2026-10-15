@@ -214,7 +214,7 @@ def _eval_table(title: str, evaluations: list[Evaluation], labels: dict[tuple[st
     table.add_column("", style="green", no_wrap=True)
     table.add_column("Score", justify="right")
     table.add_column("Price", justify="right", no_wrap=True)
-    table.add_column("Market / target", justify="right", no_wrap=True)
+    table.add_column("Market / max", justify="right", no_wrap=True)
     table.add_column("Disc", justify="right")
     table.add_column("Profit", justify="right")
     table.add_column("Price list item", overflow="fold", max_width=28)
@@ -233,7 +233,7 @@ def _eval_table(title: str, evaluations: list[Evaluation], labels: dict[tuple[st
             labels.get((l.source, l.id), ""),
             str(e.score) if e.is_candidate else "",
             _fmt_price(l.price),
-            f"{_fmt_price(e.market_price)} / {_fmt_price(e.target_buy)}",
+            f"{_fmt_price(e.market_price)} / {_fmt_price(e.max_price)}",
             f"{e.discount_pct:.0%}" if e.discount_pct is not None else "",
             _fmt_price(e.expected_profit),
             item,

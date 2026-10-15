@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, ValidationError
 from scanner.config import GeminiConfig, PricingConfig, Settings
 from scanner.db import Database
 from scanner.models import ListingDetail
-from scanner.pricing import MIN_PROFIT, Evaluation, PriceList, evaluate
+from scanner.pricing import Evaluation, PriceList, evaluate, max_buy_price, max_price_rule_lines, offer_price
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +53,8 @@ class Verdict(BaseModel):
     red_flags: list[str] = Field(description="Strictly in Russian, short")
     scam_risk: Literal["low", "medium", "high"]
     verdict: Literal["buy", "negotiate", "skip"]
-    offer_price: int = Field(description="Price for the first message, CZK, <= offer_cap from the input")
-    max_price: int = Field(description="Do not pay more than this, CZK (may be above the asking price)")
+    offer_price: int = Field(description="Price for the first message, CZK: min(offer_cap, max_price - 5 %)")
+    max_price: int = Field(description="Buy ceiling by the tiered rule, CZK (may be above the asking price)")
     reason_ru: str = Field(description="1-2 sentences, strictly in Russian")
     message_cs: str = Field(description="First message to the seller in Czech, formal 'vy', short, with offer_price")
 
@@ -72,10 +72,11 @@ SYSTEM_PROMPT = """\
   Тогда verdict=skip, а в reason_ru напиши, что это на самом деле.
 - adjusted_market_price: market_price из прайса с поправками из раздела «Корректировки рыночной цены
   по состоянию». Нет данных о состоянии — без поправок. Целое число Kč.
-- max_price: adjusted_market_price × buy_pct / 100, округлить до 100 (если «cena pevná», можно цель + 3 %).
-  Прибыль adjusted_market_price − max_price не меньше min_profit.
-- offer_price: на 5–10 % ниже max_price, округлить до 100, но ВСЕГДА не выше offer_cap
-  (92 % от цены объявления), даже если цена объявления уже ниже цели: первое предложение всегда с торгом.
+- max_price (потолок покупки) и offer_price считай от adjusted_market_price (market) ступенями:
+{max_price_rule}
+  Ступень выбирается по adjusted_market_price. min_margin и liquidity даны во входе. Входные
+  price_item.max_price и listing.offer_price посчитаны по рыночной цене без поправок.
+  Первое предложение всегда с торгом, даже если цена объявления уже ниже max_price.
 - max_price может быть выше цены объявления: это значит «если продавец упрётся, бери по его цене».
 - verdict: buy, если цена объявления ≤ max_price; negotiate, если выше max_price, но не больше чем
   на ~15 % и есть признаки торга; иначе skip. При matches_price_item=false, is_device=false или
@@ -190,7 +191,6 @@ def _is_daily_quota(exc: errors.APIError) -> bool:
 
 
 PRAGUE = ZoneInfo("Europe/Prague")
-OFFER_CAP_PCT = 92  # the first offer is always at least 8 % below the asking price
 STALE_DAYS = 14
 STALE_DISCOUNT = 0.40
 
@@ -199,9 +199,14 @@ def today_prague() -> date:
     return datetime.now(PRAGUE).date()
 
 
-def offer_cap(price: int) -> int:
+def offer_cap(price: int, pricing: PricingConfig) -> int:
     """Highest first offer: 92 % of the asking price, rounded down to 100."""
-    return price * OFFER_CAP_PCT // 100 // 100 * 100
+    return price * pricing.offer_cap_pct // 100 // 100 * 100
+
+
+def system_prompt(pricing: PricingConfig) -> str:
+    rule = "\n".join(f"  - {line}" for line in max_price_rule_lines(pricing))
+    return SYSTEM_PROMPT.replace("{max_price_rule}", rule)
 
 
 def age_days(ev: Evaluation, today: date) -> int | None:
@@ -221,9 +226,8 @@ def build_prompt(ev: Evaluation, pricing: PricingConfig, today: date | None = No
             "model": item.model,
             "variant": item.variant,
             "market_price": ev.market_price,
-            "target_buy": ev.target_buy,
-            "buy_pct": pricing.buy_pct_low_liquidity if item.liquidity <= 1 else pricing.buy_pct,
-            "min_profit": MIN_PROFIT.get(item.category, 1000),
+            "max_price": ev.max_price,
+            "min_margin": pricing.category_min_profit(item.category),
             "liquidity": item.liquidity,
             "confidence": item.confidence,
         },
@@ -239,7 +243,8 @@ def build_prompt(ev: Evaluation, pricing: PricingConfig, today: date | None = No
             "url": listing.url,
             "title": listing.title,
             "price": listing.price,
-            "offer_cap": offer_cap(listing.price),
+            "offer_cap": offer_cap(listing.price, pricing),
+            "offer_price": ev.offer_price,
             "location": listing.location,
             "posted_date": listing.posted_date.isoformat() if listing.posted_date else None,
             "age_days": age_days(ev, today),
@@ -258,19 +263,26 @@ def _price_re(value: int) -> re.Pattern[str]:
     return re.compile(rf"(?<!\d){head}[\s  .]?{tail}(?!\d)")
 
 
-def enforce_rules(v: Verdict, ev: Evaluation, today: date) -> Verdict:
-    """Hard rules the model must not break, applied after every answer."""
+def enforce_rules(v: Verdict, ev: Evaluation, today: date, pricing: PricingConfig) -> Verdict:
+    """Hard rules the model must not break, applied after every answer.
+
+    max_price and offer_price are recomputed by the tiered rule from Gemini's adjusted market price.
+    """
     price = ev.listing.price
-    assert price is not None
+    assert price is not None and ev.match is not None
     v = v.model_copy(deep=True)
+    item = ev.match.item
+    v.max_price = max_buy_price(max(0, v.adjusted_market_price), item.category, item.liquidity, pricing)
     if v.verdict != "skip":
-        cap = offer_cap(price)
-        if v.offer_price <= 0 or v.offer_price > cap:
-            old, v.offer_price = v.offer_price, cap
+        if v.verdict == "buy" and price > v.max_price:
+            v.verdict = "negotiate"
+        offer = offer_price(price, v.max_price, pricing)
+        if v.offer_price != offer:
+            old, v.offer_price = v.offer_price, offer
             if old > 0 and _price_re(old).search(v.message_cs):
-                v.message_cs = _price_re(old).sub(str(cap), v.message_cs, count=1)
-            elif v.message_cs and str(cap) not in v.message_cs:
-                v.message_cs = v.message_cs.rstrip() + f" Šlo by to za {cap} Kč?"
+                v.message_cs = _price_re(old).sub(str(offer), v.message_cs, count=1)
+            elif v.message_cs and not _price_re(offer).search(v.message_cs):
+                v.message_cs = v.message_cs.rstrip() + f" Šlo by to za {offer} Kč?"
     age = age_days(ev, today)
     if age is not None and age > STALE_DAYS and (ev.discount_pct or 0) > STALE_DISCOUNT:
         if v.verdict == "buy":
@@ -331,7 +343,7 @@ class GeminiReviewer:
     @property
     def system_instruction(self) -> str:
         if self._system is None:
-            self._system = SYSTEM_PROMPT + self.cfg.knowledge_path.read_text(encoding="utf-8")
+            self._system = system_prompt(self.pricing) + self.cfg.knowledge_path.read_text(encoding="utf-8")
         return self._system
 
     def day(self) -> str:
@@ -387,7 +399,7 @@ class GeminiReviewer:
             ev, model, verdict, rematched = await self._rematch(ev, model, verdict, today)
         if not verdict.matches_price_item or not verdict.is_device:
             verdict = verdict.model_copy(update={"verdict": "skip"})
-        verdict = enforce_rules(verdict, ev, today)
+        verdict = enforce_rules(verdict, ev, today, self.pricing)
 
         review = Review(ev, verdict, model, rematched=rematched)
         self.db.save_review(

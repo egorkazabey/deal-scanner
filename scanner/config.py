@@ -84,10 +84,26 @@ class BazosConfig(BaseModel):
     searches: list[BazosSearch] = []
 
 
+class MaxPriceTier(BaseModel):
+    """Buy ceiling for one market price band: max = min(market * pct %, market - min_margin)."""
+
+    up_to: int | None = None  # market price upper bound, inclusive; None = the last band
+    pct: int
+    min_margin: int
+
+
 class PricingConfig(BaseModel):
     prices_path: Path = PROJECT_ROOT / "data" / "prices.json"
-    buy_pct: int = 72  # target buy = market * buy_pct / 100
-    buy_pct_low_liquidity: int = 68  # for liquidity = 1
+    max_price_tiers: list[MaxPriceTier] = [
+        MaxPriceTier(up_to=4999, pct=70, min_margin=1000),
+        MaxPriceTier(up_to=12000, pct=78, min_margin=1200),
+        MaxPriceTier(pct=85, min_margin=2000),
+    ]
+    low_liquidity_pct_drop: int = 4  # liquidity = 1: the tier's pct minus this
+    min_profit: int = 1000  # expected profit below this: "low_profit", no candidate
+    min_profit_by_category: dict[str, int] = {"macbook": 2000, "gpu": 2000, "pc": 2000}  # also the ceiling margin
+    offer_cap_pct: int = 92  # first offer <= 92 % of the asking price ...
+    offer_below_max_pct: int = 5  # ... and <= max price - 5 %, rounded down to 100
     max_price_pct: int = 90  # candidate: price <= market * 90 %
     min_price_pct: int = 40  # below that: "too_cheap" (scam or broken), not a candidate
     stale_days: int = 14  # older listings get the "stale" flag and a score penalty
@@ -95,6 +111,17 @@ class PricingConfig(BaseModel):
     bundle_accessory_pct: int = 50  # extra controllers in a console bundle add this % of their price
     home_cities: list[str] = []  # score bonus +10
     near_cities: list[str] = []  # score bonus +6
+
+    @field_validator("max_price_tiers")
+    @classmethod
+    def _ordered_tiers(cls, tiers: list[MaxPriceTier]) -> list[MaxPriceTier]:
+        bounds = [t.up_to for t in tiers]
+        if not tiers or bounds[-1] is not None or None in bounds[:-1] or bounds[:-1] != sorted(set(bounds[:-1])):
+            raise ValueError("max_price_tiers: ascending up_to, the last tier without up_to")
+        return tiers
+
+    def category_min_profit(self, category: str) -> int:
+        return self.min_profit_by_category.get(category, self.min_profit)
 
 
 class GeminiConfig(BaseModel):

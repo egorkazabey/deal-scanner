@@ -18,6 +18,7 @@ from scanner.gemini import (
     offer_cap,
     quota_day,
     review_candidates,
+    system_prompt,
 )
 from scanner.models import Listing, ListingDetail
 from scanner.pricing import PriceList, evaluate
@@ -165,7 +166,8 @@ def test_rate_limiter_rpm_and_tpm():
 
 def test_build_prompt_has_item_and_listing():
     prompt = build_prompt(candidate(), PRICING, date(2026, 10, 15))
-    assert '"market_price"' in prompt and '"target_buy"' in prompt and '"liquidity"' in prompt
+    assert '"market_price": 10000' in prompt and '"max_price": 7800' in prompt and '"liquidity"' in prompt
+    assert '"min_margin": 1000' in prompt and '"offer_price": 6400' in prompt
     assert "baterie 88 %" in prompt and '"location": "Pardubice"' in prompt
 
 
@@ -276,18 +278,44 @@ def test_offer_capped_at_92_pct_and_message_follows():
     review = run(reviewer.review(ev))
     assert review.verdict.offer_price == 6400
     assert "6400 Kč" in review.verdict.message_cs and "7 000" not in review.verdict.message_cs
-    assert review.verdict.max_price == 7900  # max may stay above the asking price
+    # max by the tiers from Gemini's adjusted market 11 000: min(11 000 × 0.78, 11 000 − 1 200) -> 8 500;
+    # it may be above the asking price
+    assert review.verdict.max_price == 8500
 
 
 @pytest.mark.parametrize("price, cap", [(7000, 6400), (2500, 2300), (15990, 14700), (1000, 900)])
 def test_offer_cap_values(price, cap):
-    assert offer_cap(price) == cap
+    assert offer_cap(price, PRICING) == cap
 
 
-def test_lower_offer_is_kept():
+def test_offer_and_max_follow_the_rule():
+    ev = candidate()  # 7 000 Kč; Gemini: adjusted market 11 000 -> max 8 500, offer min(6 440, 8 075) -> 6 400
+    v = enforce_rules(verdict(offer_price=5800, max_price=9900, message_cs="Šlo by to za 5800 Kč?"),
+                      ev, date(2026, 10, 15), PRICING)
+    assert (v.max_price, v.offer_price) == (8500, 6400) and v.message_cs == "Šlo by to za 6400 Kč?"
+
+
+def test_offer_below_max_when_asking_is_high():
     ev = candidate()
-    v = enforce_rules(verdict(offer_price=5800, message_cs="Šlo by to za 5800 Kč?"), ev, date(2026, 10, 15))
-    assert v.offer_price == 5800 and v.message_cs == "Šlo by to za 5800 Kč?"
+    # Gemini: battery 79 %, adjusted market 7 500 -> max min(5 850, 6 300) -> 5 800, offer 5 800 × 0.95 -> 5 500
+    v = enforce_rules(verdict(adjusted_market_price=7500, offer_price=6400, message_cs="Šlo by to za 6 400 Kč?"),
+                      ev, date(2026, 10, 15), PRICING)
+    assert (v.max_price, v.offer_price) == (5800, 5500)
+    assert v.verdict == "negotiate"  # asking 7 000 > max: not "buy"
+    assert v.message_cs == "Šlo by to za 5500 Kč?"
+
+
+def test_skip_keeps_offer_but_gets_max():
+    v = enforce_rules(verdict(verdict="skip", offer_price=0), candidate(), date(2026, 10, 15), PRICING)
+    assert v.verdict == "skip" and v.offer_price == 0 and v.max_price == 8500
+
+
+def test_system_prompt_has_tiered_rule():
+    text = system_prompt(PRICING)
+    assert "{max_price_rule}" not in text
+    assert "market < 5 000: max_price = min(market × 0.70, market − 1 000)" in text
+    assert "market > 12 000: max_price = min(market × 0.85, market − 2 000)" in text
+    assert "offer_price = min(0.92 × цена объявления, max_price − 5 %)" in text
 
 
 def test_stale_big_discount_is_negotiate_with_question():
@@ -297,19 +325,19 @@ def test_stale_big_discount_is_negotiate_with_question():
     assert ev.is_candidate
     v = enforce_rules(
         verdict(offer_price=5000, message_cs="Dobrý den, šlo by to za 5000 Kč při osobním předání?"),
-        ev, date(2026, 10, 15),
+        ev, date(2026, 10, 15), PRICING,
     )
     assert v.verdict == "negotiate"
     assert "висит 25 дней: уточни, актуально ли" in v.red_flags
     assert v.message_cs == "Dobrý den, je inzerát ještě aktuální? Šlo by to za 5000 Kč při osobním předání?"
     # "je ... ještě k dispozici?" already asks whether the listing is still up
     asks = "Dobrý den, je iPhone ještě k dispozici? Šlo by to za 5000 Kč?"
-    assert enforce_rules(verdict(offer_price=5000, message_cs=asks), ev, date(2026, 10, 15)).message_cs == asks
+    assert enforce_rules(verdict(offer_price=5000, message_cs=asks), ev, date(2026, 10, 15), PRICING).message_cs == asks
 
 
 def test_stale_small_discount_untouched():
     ev = evaluate(make_listing(price=7000, posted_date=date(2026, 9, 20)), PRICES, PRICING, today=date(2026, 10, 15))
-    v = enforce_rules(verdict(offer_price=6000), ev, date(2026, 10, 15))  # 30 % discount
+    v = enforce_rules(verdict(offer_price=6000), ev, date(2026, 10, 15), PRICING)  # 30 % discount
     assert v.verdict == "buy" and not v.red_flags
 
 

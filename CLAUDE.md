@@ -30,12 +30,15 @@ Pipeline (built step by step, see PROMPTS.md):
   model names go to `_ITEM_ALIASES`), `evaluate()` / `evaluate_many()` (metrics, stop words, accessory
   incl. foreign brands/words, too_cheap, scam_suspect, shop, stale, low_profit = below MIN_PROFIT is no
   candidate, `bundle_bonus()` for extra controllers, score 0–100 with a discount cap), `rank()`.
-  Thresholds and distance bonus: `pricing:` in config.yaml
+  Buy ceiling `max_buy_price()` is tiered by market price (`pricing.max_price_tiers`), first offer
+  `offer_price()`; `max_price_rule_lines()` renders the rule for the Gemini prompt and must match
+  KNOWLEDGE.md (a test checks it). Thresholds and distance bonus: `pricing:` in config.yaml
 - `scanner/gemini.py`: Gemini second opinion (google-genai). `Verdict` = response schema,
   `GeminiReviewer.review()` (cache in `gemini_reviews` by source+id+price, per-model `RateLimiter` for
   RPM/TPM, RPD from `gemini_usage`, 429 backoff, daily quota → fallback model → "без ИИ"),
   `review_candidates()` (fetch description, re-check rules, then Gemini). After each answer
-  `enforce_rules()` (offer ≤ 92 % of the asking price, stale + big discount → negotiate) and, when Gemini
+  `enforce_rules()` (max_price and offer_price recomputed by the tiered rule from Gemini's adjusted
+  market price, buy above max → negotiate, stale + big discount → negotiate) and, when Gemini
   says the price list item is wrong, `_rematch()` by its model (one more request at most); such cases go
   to the `pricing_mismatches` table (`reviews` shows them). KNOWLEDGE.md is the system
   instruction. Models and limits: `GEMINI_*` in .env (explicit ids only, no `*-latest`); quota day is

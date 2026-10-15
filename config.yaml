@@ -27,11 +27,21 @@ bazos:
     - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 20000}
 
 pricing:
-  buy_pct: 72                 # target buy price = market_price * buy_pct / 100
-  buy_pct_low_liquidity: 68   # for items with liquidity = 1
+  # Buy ceiling (max_price) by market price band, rounded down to 100:
+  #   max = min(market * pct / 100, market - min_margin)
+  # up_to is the band's upper market price, inclusive; the last band has none.
+  max_price_tiers:
+    - {up_to: 4999,  pct: 70, min_margin: 1000}   # market < 5 000
+    - {up_to: 12000, pct: 78, min_margin: 1200}   # 5 000 – 12 000
+    - {pct: 85, min_margin: 2000}                 # > 12 000
+  low_liquidity_pct_drop: 4   # liquidity = 1: pct - 4 (70 -> 66, 78 -> 74, 85 -> 81)
+  min_profit: 1000            # expected profit (market - price) below this: not a candidate
+  min_profit_by_category: {macbook: 2000, gpu: 2000, pc: 2000}  # also the ceiling's min margin in every band
+  # First offer = min(offer_cap_pct % of the asking price, max_price - offer_below_max_pct %), down to 100
+  offer_cap_pct: 92
+  offer_below_max_pct: 5
   max_price_pct: 90           # candidate if price <= 90 % of market ...
   min_price_pct: 40           # ... and >= 40 % (below: "too_cheap", almost always scam or broken)
-  # Also required: expected profit >= minimum from KNOWLEDGE.md (1 000 Kč, PC/GPU/MacBook 2 000 Kč)
   stale_days: 14              # older listings: flag "stale" + score penalty
   discount_cap_pct: 45        # discount above this adds no more score
   bundle_accessory_pct: 50    # extra controllers in a console bundle add 50 % of their price list price

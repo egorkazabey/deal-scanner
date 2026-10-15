@@ -3,7 +3,7 @@
 1. `normalize()` a title (case, diacritics, "16pro" -> "16 pro", units, synonyms).
 2. `identify()` it: category + canonical model + attributes (storage, RAM/SSD, size, ...).
 3. `PriceList.match()` picks the price list item; missing memory -> cheapest variant, confidence "low".
-4. `evaluate()` computes market / target buy / discount / profit, flags (stop words, accessory,
+4. `evaluate()` computes market / max price (tiered buy ceiling) / offer / discount / profit, flags (stop words, accessory,
    too_cheap, scam_suspect, shop) and a 0-100 score. `evaluate_many()` also catches duplicate batches.
 
 Price list items are parsed with the same `identify()` as listing titles, so a new item in
@@ -690,7 +690,46 @@ def is_accessory(text: str, ident: Identity | None) -> bool:
 
 # --- evaluation ------------------------------------------------------------------------------
 
-MIN_PROFIT = {"macbook": 2000, "gpu": 2000, "pc": 2000}  # everything else: 1000 (KNOWLEDGE.md)
+def max_buy_price(market: int, category: str, liquidity: int, cfg: PricingConfig) -> int:
+    """Buy ceiling from the market price band in config.yaml, rounded down to 100."""
+    tier = next(t for t in cfg.max_price_tiers if t.up_to is None or market <= t.up_to)
+    pct = tier.pct - (cfg.low_liquidity_pct_drop if liquidity <= 1 else 0)
+    margin = max(tier.min_margin, cfg.min_profit_by_category.get(category, 0))
+    return max(0, min(market * pct // 100, market - margin) // 100 * 100)
+
+
+def offer_price(asking: int, max_price: int, cfg: PricingConfig) -> int:
+    """First offer: min(92 % of the asking price, max price - 5 %), rounded down to 100."""
+    cap = asking * cfg.offer_cap_pct
+    below_max = max_price * (100 - cfg.offer_below_max_pct)
+    return max(0, min(cap, below_max) // 100 // 100 * 100)
+
+
+def max_price_rule_lines(cfg: PricingConfig) -> list[str]:
+    """The ceiling and offer rule in words (Russian), for the Gemini prompt and KNOWLEDGE.md."""
+    lines, prev = [], None
+    for t in cfg.max_price_tiers:
+        if prev is None:
+            band = f"market < {_kc(t.up_to + 1)}" if t.up_to is not None else "любой market"
+        elif t.up_to is None:
+            band = f"market > {_kc(prev)}"
+        else:
+            band = f"market {_kc(prev + 1)}–{_kc(t.up_to)}"
+        lines.append(f"{band}: max_price = min(market × {t.pct / 100:.2f}, market − {_kc(t.min_margin)})")
+        prev = t.up_to
+    cats = "/".join(sorted(cfg.min_profit_by_category))
+    margins = sorted(set(cfg.min_profit_by_category.values()))
+    lines.append(f"{cats}: минимальная прибыль (market − max_price) не меньше "
+                 f"{'/'.join(_kc(m) for m in margins)} на всех ступенях")
+    lines.append(f"liquidity = 1: коэффициент ещё −{cfg.low_liquidity_pct_drop / 100:.2f}")
+    lines.append("max_price округлить вниз до 100")
+    lines.append(f"offer_price = min({cfg.offer_cap_pct / 100:.2f} × цена объявления, "
+                 f"max_price − {cfg.offer_below_max_pct} %), округлить вниз до 100")
+    return lines
+
+
+def _kc(value: int) -> str:
+    return f"{value:,}".replace(",", " ")
 
 
 @dataclass
@@ -698,7 +737,8 @@ class Evaluation:
     listing: Listing
     match: Match | None = None
     market_price: int | None = None
-    target_buy: int | None = None
+    max_price: int | None = None  # buy ceiling, see max_buy_price()
+    offer_price: int | None = None  # first offer, see offer_price()
     discount_pct: float | None = None  # 1 - price/market
     expected_profit: int | None = None  # market - price
     flags: list[str] = field(default_factory=list)
@@ -750,14 +790,14 @@ def evaluate(
         return ev
     item = ev.match.item
     market = item.market_price + bundle_bonus(title, ev.match, prices, cfg)
-    pct = cfg.buy_pct_low_liquidity if item.liquidity <= 1 else cfg.buy_pct
     ev.market_price = market
-    ev.target_buy = int(round(market * pct / 100, -2))
+    ev.max_price = max_buy_price(market, item.category, item.liquidity, cfg)
     if listing.price is None:
         ev.flags.append("no_price")
         return ev
 
     price = listing.price
+    ev.offer_price = offer_price(price, ev.max_price, cfg)
     ev.discount_pct = 1 - price / market
     ev.expected_profit = market - price
     if price < market * cfg.min_price_pct / 100:
@@ -778,7 +818,7 @@ def evaluate(
         ev.scam_reasons.append(f"< 55 % рынка + «{m.group(0)}»")
     if ev.scam_reasons:
         ev.flags.append("scam_suspect")
-    if ev.expected_profit < MIN_PROFIT.get(item.category, 1000):
+    if ev.expected_profit < cfg.category_min_profit(item.category):
         ev.flags.append("low_profit")
 
     ev.is_candidate = (
@@ -800,7 +840,7 @@ def score(ev: Evaluation, cfg: PricingConfig, today: date | None = None) -> int:
     cap = cfg.discount_cap_pct / 100
     pts = 45 * _clamp((min(ev.discount_pct, cap) - 0.10) / (cap - 0.10))
     pts += 15 * _clamp((item.liquidity - 1) / 2)
-    min_profit = MIN_PROFIT.get(item.category, 1000)
+    min_profit = cfg.category_min_profit(item.category)
     pts += 20 * _clamp(ev.expected_profit / (min_profit * 4))
 
     city = _city(ev.listing.location)
