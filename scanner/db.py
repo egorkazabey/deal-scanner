@@ -176,7 +176,8 @@ CREATE TABLE IF NOT EXISTS runs (
     price_changed  INTEGER NOT NULL DEFAULT 0,
     candidates     INTEGER NOT NULL DEFAULT 0,
     alerts         INTEGER NOT NULL DEFAULT 0,
-    errors         TEXT NOT NULL DEFAULT ''
+    errors         TEXT NOT NULL DEFAULT '',
+    source         TEXT NOT NULL DEFAULT 'bazos'
 );
 
 -- Small bot state (paused, ...).
@@ -238,6 +239,9 @@ class Database:
                 self.conn.execute("ALTER TABLE listings ADD COLUMN gone_at TEXT")
             if "checked_at" not in cols:  # last detail page check of a "contacted" listing
                 self.conn.execute("ALTER TABLE listings ADD COLUMN checked_at TEXT")
+        if "source" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(runs)")}:
+            with self.conn:
+                self.conn.execute("ALTER TABLE runs ADD COLUMN source TEXT NOT NULL DEFAULT 'bazos'")
 
     def close(self) -> None:
         self.conn.close()
@@ -505,13 +509,15 @@ class Database:
         rows = self.conn.execute("SELECT source, listing_id, base_price FROM watches").fetchall()
         return {(r["source"], r["listing_id"]): r["base_price"] for r in rows}
 
-    def to_check_gone(self, seen_before: datetime, checked_before: datetime, limit: int) -> list[sqlite3.Row]:
+    def to_check_gone(
+        self, seen_before: datetime, checked_before: datetime, limit: int, source: str = "bazos"
+    ) -> list[sqlite3.Row]:
         """"Contacted" listings missing from the latest scan, not checked recently."""
         return self.conn.execute(
             """SELECT * FROM listings WHERE status = 'contacted' AND gone_at IS NULL AND last_seen < ?
-                   AND (checked_at IS NULL OR checked_at < ?)
+                   AND (checked_at IS NULL OR checked_at < ?) AND source = ?
                ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?""",
-            (seen_before.isoformat(timespec="seconds"), checked_before.isoformat(timespec="seconds"), limit),
+            (seen_before.isoformat(timespec="seconds"), checked_before.isoformat(timespec="seconds"), source, limit),
         ).fetchall()
 
     def mark_checked(self, source: str, listing_id: str, gone: bool, now: datetime | None = None) -> None:
@@ -523,10 +529,10 @@ class Database:
                 (ts, int(gone), ts, source, listing_id),
             )
 
-    def start_run(self, now: datetime | None = None) -> int:
+    def start_run(self, now: datetime | None = None, source: str = "bazos") -> int:
         ts = (now or datetime.now()).isoformat(timespec="seconds")
         with self.conn:
-            return self.conn.execute("INSERT INTO runs (started_at) VALUES (?)", (ts,)).lastrowid
+            return self.conn.execute("INSERT INTO runs (started_at, source) VALUES (?, ?)", (ts, source)).lastrowid
 
     def finish_run(self, run_id: int, now: datetime | None = None, **counts: int | str) -> None:
         ts = (now or datetime.now()).isoformat(timespec="seconds")
@@ -537,15 +543,18 @@ class Database:
                 (ts, *counts.values(), run_id),
             )
 
-    def last_success(self) -> datetime | None:
-        """End of the last scan that finished and fetched listings."""
+    def last_success(self, source: str = "bazos") -> datetime | None:
+        """End of the last scan of `source` that finished and fetched listings."""
         row = self.conn.execute(
-            "SELECT MAX(finished_at) FROM runs WHERE finished_at IS NOT NULL AND listings > 0"
+            "SELECT MAX(finished_at) FROM runs WHERE finished_at IS NOT NULL AND listings > 0 AND source = ?",
+            (source,),
         ).fetchone()
         return datetime.fromisoformat(row[0]) if row and row[0] else None
 
-    def last_runs(self, limit: int = 1) -> list[sqlite3.Row]:
-        return self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    def last_runs(self, limit: int = 1, source: str = "bazos") -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM runs WHERE source = ? ORDER BY id DESC LIMIT ?", (source, limit)
+        ).fetchall()
 
     def get_state(self, key: str, default: str | None = None) -> str | None:
         row = self.conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()

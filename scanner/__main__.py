@@ -16,12 +16,14 @@ from scanner import learn
 from scanner.bot import ScannerApp, send_pending
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
+from scanner.fb_worker import run_worker
 from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
 from scanner.logs import setup_logging
 from scanner.pc import breakdown_lines
 from scanner.pipeline import PcResult, run_scan
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
+from scanner.sources.facebook import FacebookClient
 
 log = logging.getLogger("scanner")
 console = Console()
@@ -29,14 +31,21 @@ console = Console()
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
 
 
+def make_client(settings: Settings, cfg, source: str, headless: bool | None = None):
+    if source == "fb":
+        return FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=headless)
+    return BazosClient(cfg.bazos)
+
+
 async def run_once(
-    settings: Settings, dry: bool, show_all: bool, ai: bool, ai_limit: int | None, max_alerts: int | None
+    settings: Settings, dry: bool, show_all: bool, ai: bool, ai_limit: int | None, max_alerts: int | None,
+    source: str = "bazos",
 ) -> None:
     """One scan through the pipeline; without --dry the alerts go to Telegram right away."""
     cfg = load_config(settings.config_path)
     db = Database(settings.db_path)
     try:
-        async with BazosClient(cfg.bazos) as client:
+        async with make_client(settings, cfg, source) as client:
             limit = max_alerts if max_alerts is not None else ai_limit
             report = await run_scan(settings, cfg, db, client, ai=ai, max_alerts=limit, dry=dry)
         _print_evaluations(report.evaluations, report.labels, show_all)
@@ -284,6 +293,22 @@ async def save_fixtures(settings: Settings) -> None:
     console.print(f"Saved fixtures to {FIXTURES_DIR} (detail: {target.url})")
 
 
+async def fb_login(settings: Settings) -> None:
+    """A visible browser on Marketplace; you log in by hand, the session stays in fb_profile/."""
+    cfg = load_config(settings.config_path)
+    console.print(f"Opening Chromium with the profile {settings.fb_profile_dir}. Log in to Facebook "
+                  "(2FA if asked); the window closes by itself once you are in. Nothing is typed for you.")
+    async with FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=False) as fb:
+        ok = await fb.login_interactively()
+    if ok:
+        db = Database(settings.db_path)
+        db.set_state("fb_blocked", "0")  # the bot may use FB again
+        db.close()
+        console.print("[green]Logged in, profile saved.[/] Check: python -m scanner run-once --source fb --dry")
+    else:
+        console.print("[yellow]No login detected (window closed or 10 min passed). Run fb-login again.[/]")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m scanner")
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
@@ -291,7 +316,10 @@ def main() -> None:
 
     p_run = sub.add_parser("run-once", help="run all searches once")
     p_run.add_argument("--dry", action="store_true", help="no notifications, only print to console")
-    p_run.add_argument("--source", choices=["bazos"], default="bazos")
+    p_run.add_argument("--source", choices=["bazos", "fb"], default="bazos",
+                       help="fb: Facebook Marketplace (log in first with fb-login)")
+    sub.add_parser("fb-login", help="open a visible browser and log in to Facebook by hand (saved in fb_profile/)")
+    sub.add_parser("fb-worker", help="Facebook only, no Telegram polling: for a home PC next to the hosted bot")
     p_run.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
     p_run.add_argument("--no-ai", action="store_true", help="skip the Gemini second opinion")
     p_run.add_argument("--ai-limit", type=int, default=None, help="Gemini for at most N top candidates")
@@ -321,12 +349,16 @@ def main() -> None:
     args = parser.parse_args()
     settings = Settings()
     # Files only for the commands that run unattended or touch the network.
-    log_dir = settings.log_dir if args.command in ("bot", "run-once") else None
+    log_dir = settings.log_dir if args.command in ("bot", "run-once", "fb-worker") else None
     setup_logging("DEBUG" if args.verbose else settings.log_level, log_dir, console)
 
     if args.command == "run-once":
         asyncio.run(run_once(settings, args.dry, args.all, ai=not args.no_ai, ai_limit=args.ai_limit,
-                             max_alerts=args.max_alerts))
+                             max_alerts=args.max_alerts, source=args.source))
+    elif args.command == "fb-login":
+        asyncio.run(fb_login(settings))
+    elif args.command == "fb-worker":
+        asyncio.run(run_worker(settings))
     elif args.command == "bot":
         asyncio.run(ScannerApp(settings).run())
     elif args.command == "review":

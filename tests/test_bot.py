@@ -362,3 +362,11 @@ def test_buttons_through_the_dispatcher(files):
         assert app.db.get_state("paused") == "1"
 
     run(scenario())
+
+
+def test_deliver_without_buttons_for_the_fb_worker():
+    db = Database(":memory:")
+    db.add_alert("fb", "5", 7000, "deal", "fb alert", "s")
+    session = FakeSession()
+    run(deliver(make_bot("123456:TEST", session=session), db, CHAT, quiet=False, buttons=False))
+    assert session.calls[0].text == "fb alert" and session.calls[0].reply_markup is None

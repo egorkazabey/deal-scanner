@@ -19,6 +19,11 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str | None = None
     telegram_chat_id: int | None = None
+    # Facebook Marketplace (off by default; see scanner/sources/facebook.py). No passwords anywhere:
+    # `python -m scanner fb-login` opens a visible browser and you log in by hand into this profile.
+    fb_enabled: bool = False
+    fb_profile_dir: Path = PROJECT_ROOT / "fb_profile"
+    fb_browser_path: str | None = None  # Chromium executable when Playwright's own download is not wanted
     gemini_api_key: str | None = None
     # Explicit model ids only (no *-latest aliases): the free tier quota is per model.
     gemini_model: str = "gemini-3.5-flash-lite"
@@ -91,6 +96,21 @@ class MaxPriceTier(BaseModel):
     up_to: int | None = None  # market price upper bound, inclusive; None = the last band
     pct: int
     min_margin: int
+
+
+class FacebookConfig(BaseModel):
+    """FB Marketplace: rare, human-paced, logged in by hand. FB_ENABLED in .env switches it on."""
+
+    interval_min: int = 25  # one FB run every 25 min ...
+    jitter_min: int = 5  # ... +- up to 5 min; never in quiet hours
+    days_since_listed: int = 1
+    scrolls: int = 4  # result page scrolls (FB loads more on scroll)
+    scroll_pause: float = 1.5  # seconds between scrolls (plus a random bit)
+    search_pause: tuple[float, float] = (4.0, 9.0)  # random pause between searches, seconds
+    details_per_run: int = 10  # detail pages opened per run, at most (candidates only)
+    headless: bool = True
+    timeout: float = 30.0  # seconds per page
+    extra_cities: list[str] = []  # besides pricing.home_cities / near_cities: FB mixes in the whole country
 
 
 class PricingConfig(BaseModel):
@@ -190,6 +210,7 @@ class LearnConfig(BaseModel):
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
     pricing: PricingConfig = PricingConfig()
+    facebook: FacebookConfig = FacebookConfig()
     gemini: GeminiConfig = GeminiConfig()
     notify: NotifyConfig = NotifyConfig()
     learn: LearnConfig = LearnConfig()

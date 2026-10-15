@@ -115,6 +115,35 @@ the price list are listed at the end. Buttons «✅ Применить всё» 
 - After editing: `python -m scanner evaluate --all` re-evaluates the stored listings offline, `pytest`
   checks that everything is still recognized. Then commit, push to `main`, redeploy.
 
+## Facebook Marketplace (optional)
+
+Facebook has no public Marketplace API and automating it is against its rules: the account may get
+restricted. So the source is off by default, scans rarely (every ~25 min with jitter, never in quiet
+hours), opens at most 10 detail pages per run and never works around a login wall, checkpoint or
+captcha: it stops and asks you to log in again. There are no passwords anywhere.
+
+Prefer a home PC: from a data-center IP Facebook asks for confirmations much more often.
+
+```
+pip install -e ".[fb]"
+playwright install chromium                       # once
+python -m scanner fb-login                        # a browser opens: log in by hand, it closes by itself
+python -m scanner run-once --source fb --dry      # check what gets parsed
+```
+
+Location and radius come from the Facebook account settings (set Ústí nad Orlicí, 60 km there).
+Listings from cities outside `pricing.home_cities` / `near_cities` (+ `facebook.extra_cities`) are dropped,
+because Facebook mixes in the whole country.
+
+Two ways to run it:
+- **Hosted bot for Bazoš + `python -m scanner fb-worker` at home** (`FB_ENABLED` is not needed for the
+  worker). The worker only scans FB and sends alerts, without buttons: the hosted bot has its own database.
+- **Everything at home:** stop the hosted bot, set `FB_ENABLED=true` and run `python main.py`. FB alerts
+  then have buttons and `/status` shows the FB state.
+
+When Facebook wants a login, the bot says so; run `fb-login` on that PC and tap «🔁 Проверить FB»
+(the worker continues by itself).
+
 ## CLI
 
 ```
@@ -125,6 +154,9 @@ python -m scanner review --ids 123 --refresh --json  # Gemini for a specific lis
 python -m scanner reviews --skipped     # what Gemini rejected, Gemini usage
 python -m scanner evaluate --all        # re-evaluate the database after a price list change
 python -m scanner price-report          # the price report (= /prices)
+python -m scanner fb-login              # log in to Facebook by hand (profile in fb_profile/)
+python -m scanner run-once --source fb --dry  # one Facebook scan without sending
+python -m scanner fb-worker             # Facebook only, for a home PC next to the hosted bot
 python -m scanner save-fixtures         # refresh the test HTML when Bazoš changes its layout
 pytest
 ```

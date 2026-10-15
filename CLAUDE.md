@@ -25,6 +25,13 @@ Pipeline (built step by step, see PROMPTS.md):
 - `scanner/models.py`: `Listing`, `ListingDetail` (source-independent)
 - `scanner/sources/bazos.py`: URL builder, pure parsers (`parse_search_page`, `parse_detail`,
   `parse_price`), `BazosClient` (polite async httpx client: `scan()`, `fetch_detail()`)
+- `scanner/sources/facebook.py`: FB Marketplace on Playwright (optional extra `.[fb]`), off unless FB_ENABLED.
+  Pure parsers (`parse_card`, `parse_detail_text`, `parse_price`, `nearby` = only configured cities, FB mixes
+  in the whole country) + `FacebookClient` (persistent profile `fb_profile/`, sequential, human pauses, at
+  most `facebook.details_per_run` detail pages). A login wall / checkpoint / captcha raises `FbLoginRequired`:
+  never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. Gone/sold checks are Bazoš only.
+  `scanner/fb_worker.py` (`fb-worker`): FB only, no Telegram polling, alerts without buttons, for a home PC
+  next to the hosted bot (two pollers with one token conflict)
 - `scanner/db.py`: SQLite `listings` (PK source+id, `status` new/alerted/hidden/contacted) and
   `price_history`; `Database.upsert()` returns NEW / PRICE_CHANGED / UNCHANGED
 - `scanner/pricing.py`: rule-based evaluation, no LLM. `normalize()` titles, `identify()` category +
@@ -93,6 +100,9 @@ python -m scanner reviews --skipped     # what Gemini rejected in 24 h, pricing 
 python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. after editing prices.json)
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 python -m scanner price-report          # price proposals from the collected observations (= /prices)
+python -m scanner fb-login              # visible browser, log in to FB by hand (profile in fb_profile/)
+python -m scanner run-once --source fb --dry  # one FB scan, print what was parsed
+python -m scanner fb-worker             # FB only on a home PC, next to the hosted bot
 pytest
 ```
 README.md (English) is the user-facing guide: setup, hosting, bot commands, troubleshooting.

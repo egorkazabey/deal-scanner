@@ -18,6 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+fb = ["playwright>=1.47"]  # Facebook Marketplace: pip install -e ".[fb]" && playwright install chromium
 
 [build-system]
 requires = ["setuptools>=69"]

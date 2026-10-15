@@ -98,7 +98,7 @@ async def run_scan(
     reviewer_factory: Callable[..., GeminiReviewer] = GeminiReviewer,
 ) -> RunReport:
     started = now()
-    run_id = db.start_run(started)
+    run_id = db.start_run(started, getattr(client, "source", "bazos"))
     report = RunReport()
     try:
         await _scan(settings, cfg, db, client, report, ai, max_alerts, quiet, dry, started, reviewer_factory)
@@ -181,7 +181,7 @@ async def _scan(
     await _pc_alerts(settings, cfg, db, client, evaluations, prices, today, quiet, dry, ai, started, report,
                      drops, reviewer_factory)
 
-    if not dry:
+    if not dry and getattr(client, "source", "bazos") == "bazos":  # detail checks over plain HTTP: Bazoš only
         await _gone_alerts(db, cfg, client, started, quiet, report)
         await learn.check_sold(db, client, cfg.learn, started)
 

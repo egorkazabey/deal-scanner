@@ -26,6 +26,20 @@ bazos:
     - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 25000}
     - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 25000}
 
+facebook:
+  # FB Marketplace, off by default (FB_ENABLED=true in .env). Log in once by hand: python -m scanner fb-login.
+  # Same searches as Bazoš; location and radius come from the FB account settings. Listings from cities
+  # outside pricing.home_cities / near_cities (+ extra_cities) are dropped: FB mixes in the whole country.
+  interval_min: 25            # one FB run every 25 min +- jitter_min, never in quiet hours
+  jitter_min: 5
+  days_since_listed: 1
+  scrolls: 4                  # result page scrolls, scroll_pause s apart
+  scroll_pause: 1.5
+  search_pause: [4, 9]        # random pause between searches, seconds
+  details_per_run: 10         # detail pages opened per run (candidates only)
+  headless: true
+  extra_cities: []
+
 pricing:
   # Buy ceiling (max_price) by market price band, rounded down to 100:
   #   max = min(market * pct / 100, market - min_margin)

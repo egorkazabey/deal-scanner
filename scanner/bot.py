@@ -19,7 +19,9 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import Command, CommandObject
-from aiogram.types import BotCommandScopeChat, CallbackQuery, InlineKeyboardMarkup, MenuButtonCommands, Message
+from aiogram.types import (
+    BotCommandScopeChat, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonCommands, Message,
+)
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -37,6 +39,7 @@ from scanner.notify import kc, split_messages
 from scanner.pipeline import run_scan
 from scanner.pricing import PriceList
 from scanner.sources.bazos import BazosClient
+from scanner.sources.facebook import FacebookClient, FbLoginRequired
 
 log = logging.getLogger(__name__)
 
@@ -106,8 +109,11 @@ async def _send(bot: Bot, chat_id: int, text: str, markup=None) -> int:
     raise AssertionError("unreachable")
 
 
-async def deliver(bot: Bot, db: Database, chat_id: int, quiet: bool) -> int:
-    """Send waiting alerts: quiet-hours ones as one digest (after the quiet hours), others one by one."""
+async def deliver(bot: Bot, db: Database, chat_id: int, quiet: bool, buttons: bool = True) -> int:
+    """Send waiting alerts: quiet-hours ones as one digest (after the quiet hours), others one by one.
+
+    buttons=False: fb-worker on another machine; the bot that handles the buttons has its own DB.
+    """
     if quiet:
         return 0
     pending = db.pending_alerts()
@@ -125,7 +131,7 @@ async def deliver(bot: Bot, db: Database, chat_id: int, quiet: bool) -> int:
     for r in pending:
         if r["quiet"]:
             continue
-        markup = None if r["kind"] == "gone" else alert_keyboard(r["source"], r["listing_id"])
+        markup = None if r["kind"] == "gone" or not buttons else alert_keyboard(r["source"], r["listing_id"])
         try:
             mid = await _send(bot, chat_id, r["text"], markup)
         except TelegramAPIError as exc:
@@ -152,6 +158,8 @@ class ScannerApp:
         self._scan_lock = asyncio.Lock()
         self._last_scan: datetime | None = None
         self._scan_task: asyncio.Task | None = None
+        self._fb_lock = asyncio.Lock()
+        self._fb_task: asyncio.Task | None = None
         self.started_at = datetime.now()  # naive local, like the DB timestamps
         self.dp.include_router(self._router())
         self.dp.startup.register(self._on_startup)
@@ -191,6 +199,36 @@ class ScannerApp:
             log.exception("scan failed")
         await deliver(self.bot, self.db, self.chat_id, quiet)
 
+    async def tick_fb(self) -> None:
+        """Facebook Marketplace run: rare, never in quiet hours, stops at a login wall until fb-login."""
+        if self._fb_lock.locked() or self.db.get_state("paused") == "1" or self.db.get_state("fb_blocked") == "1":
+            return
+        cfg = self.cfg()
+        if in_quiet_hours(datetime.now(PRAGUE), cfg.notify):
+            return
+        async with self._fb_lock:
+            self._fb_task = asyncio.current_task()
+            try:
+                async with FacebookClient(cfg, self.settings.fb_profile_dir, self.settings.fb_browser_path) as fb:
+                    report = await run_scan(self.settings, cfg, self.db, fb)
+                log.info("fb run: %d listings, %d candidates, %d alerts", report.listings, report.candidates,
+                         len(report.alerts))
+            except FbLoginRequired as exc:
+                log.error("fb: %s", exc)
+                self.db.set_state("fb_blocked", "1")
+                await self._notify(
+                    "⚠️ Facebook требует входа (стена входа / проверка / капча). FB-источник остановлен, "
+                    "ничего не обхожу.\nЗапусти на ПК с профилем: <code>python -m scanner fb-login</code>, "
+                    "потом нажми кнопку ниже.", InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text="🔁 Проверить FB", callback_data="a:fbretry")]]))
+            except asyncio.CancelledError:
+                log.info("fb run cancelled: shutting down")
+            except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
+                log.exception("fb scan failed")
+            finally:
+                self._fb_task = None
+        await deliver(self.bot, self.db, self.chat_id, quiet=False)
+
     async def _on_startup(self) -> None:
         restored = overrides.replay(self.settings, self.db)  # Telegram edits survive a redeploy
         cfg = self.cfg()
@@ -200,6 +238,12 @@ class ScannerApp:
         )
         self.scheduler.add_job(self.health_check, IntervalTrigger(minutes=5), id="health", max_instances=1,
                                coalesce=True)
+        if self.settings.fb_enabled:
+            self.scheduler.add_job(
+                self.tick_fb, IntervalTrigger(minutes=cfg.facebook.interval_min, jitter=cfg.facebook.jitter_min * 60),
+                id="fb", max_instances=1, coalesce=True, next_run_time=datetime.now(PRAGUE) + timedelta(minutes=2),
+            )
+            log.info("Facebook source on: every %d min", cfg.facebook.interval_min)
         hour, minute = map(int, cfg.learn.report_time.split(":"))
         self.scheduler.add_job(self.weekly_report, CronTrigger(day_of_week=cfg.learn.report_day, hour=hour,
                                                                minute=minute, timezone=PRAGUE), id="prices")
@@ -248,6 +292,12 @@ class ScannerApp:
 
     async def _on_shutdown(self) -> None:
         self.scheduler.shutdown(wait=False)
+        if self._fb_task:
+            self._fb_task.cancel()
+            try:
+                await self._fb_task
+            except asyncio.CancelledError:
+                pass
         if self._scan_task:  # stop a running scan before the DB goes away
             self._scan_task.cancel()
             try:
@@ -356,6 +406,8 @@ class ScannerApp:
             toast, name, screen_args = act(action, args, self.settings, self.db)
             if action == "resume":
                 self._kick()
+            if action == "fbretry":
+                self._kick("fb")
             await _edit(q, screen(name, *screen_args))
             await q.answer(toast)
 
@@ -399,8 +451,8 @@ class ScannerApp:
 
         return r
 
-    def _kick(self) -> None:
-        job = self.scheduler.get_job("bazos")
+    def _kick(self, job_id: str = "bazos") -> None:
+        job = self.scheduler.get_job(job_id)
         if job:
             job.modify(next_run_time=datetime.now(PRAGUE) + timedelta(seconds=5))
 

@@ -190,6 +190,7 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
         f"📍 Bazoš: {cfg.bazos.radius_km} км · {len(cfg.bazos.searches)} поисков · каждые {cfg.notify.interval_min} мин"
         f" · тихие часы {cfg.notify.quiet_start}-{cfg.notify.quiet_end}",
     ]
+    lines.append(fb_status_line(settings, cfg, db))
     reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, PriceList([]), db)
     if reviewer.disabled_reason:
         lines.append(f"🤖 Gemini: {reviewer.disabled_reason}")
@@ -199,9 +200,21 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
     return "\n".join(lines)
 
 
+def fb_status_line(settings: Settings, cfg: AppConfig, db: Database) -> str:
+    if not settings.fb_enabled:
+        return "📘 Facebook: выключен (FB_ENABLED)"
+    if db.get_state("fb_blocked") == "1":
+        return "📘 Facebook: ⚠️ ждёт входа, запусти fb-login и нажми «🔁 Проверить FB»"
+    runs = db.last_runs(1, source="fb")
+    last = (f"последний прогон {_fmt_ts(runs[0]['started_at'])}, объявлений {runs[0]['listings']}"
+            if runs and runs[0]["finished_at"] else "прогонов ещё не было")
+    return f"📘 Facebook: каждые ~{cfg.facebook.interval_min} мин, {last}"
+
+
 def screen_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datetime | None = None) -> Screen:
+    fb_row = [_btn("🔁 Проверить FB", "a:fbretry")] if settings.fb_enabled and db.get_state("fb_blocked") == "1" else []
     return cmd_status(settings, cfg, db, next_run), _kb(
-        [_btn("🔄 Обновить", "m:status"), _pause_button(db, "status")], [HOME])
+        [_btn("🔄 Обновить", "m:status"), _pause_button(db, "status")], fb_row, [HOME])
 
 
 @dataclass
@@ -545,6 +558,9 @@ def act(action: str, args: list[str], settings: Settings, db: Database) -> tuple
         db.set_state("paused", "1" if action == "pause" else "0")
         return ("⏸ Пауза" if action == "pause" else "▶️ Сканирование продолжается"), (args[0] if args else "home"), []
     try:
+        if action == "fbretry":
+            db.set_state("fb_blocked", "0")
+            return "Проверяю FB в ближайшие секунды", "status", []
         if action == "ptoggle" and len(args) == 2:
             learn.toggle(db, int(args[0]), int(args[1]))
             return "", "pselect", [args[0]]
