@@ -59,7 +59,7 @@ Pipeline (built step by step, see PROMPTS.md):
 ## Commands
 ```
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-python -m scanner bot                   # Telegram bot + scheduler (the normal way to run it)
+python -m scanner bot                   # Telegram bot + scheduler (the normal way to run it; = python main.py)
 python -m scanner run-once --max-alerts 1  # one scan, alerts go to Telegram right away
 python -m scanner run-once --dry        # scan all Bazoš searches, print ranked candidates and would-be alerts
 python -m scanner run-once --dry --all  # also print matched listings that are not candidates (and why)
