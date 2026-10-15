@@ -56,8 +56,19 @@ class BazosConfig(BaseModel):
     searches: list[BazosSearch] = []
 
 
+class PricingConfig(BaseModel):
+    prices_path: Path = PROJECT_ROOT / "data" / "prices.json"
+    buy_pct: int = 72  # target buy = market * buy_pct / 100
+    buy_pct_low_liquidity: int = 68  # for liquidity = 1
+    max_price_pct: int = 90  # candidate: price <= market * 90 %
+    min_price_pct: int = 40  # below that: "too_cheap" (scam or broken), not a candidate
+    home_cities: list[str] = []  # score bonus +10
+    near_cities: list[str] = []  # score bonus +6
+
+
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
+    pricing: PricingConfig = PricingConfig()
 
 
 def load_config(path: Path) -> AppConfig:
