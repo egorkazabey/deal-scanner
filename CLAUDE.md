@@ -54,8 +54,12 @@ Pipeline (built step by step, see PROMPTS.md):
   then `evaluate(..., match=pc_match())` applies the usual ceiling, offer and score
 - `scanner/notify.py`: message texts (HTML), digest splitting
 - `scanner/bot.py`: aiogram 3 bot + APScheduler in one process (`ScannerApp`): scan every 10 min +
-  jitter, quiet hours (scan every 30 min, alerts → morning digest), buttons, commands (`cmd_*` are
-  plain functions). Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
+  jitter, quiet hours (scan every 30 min, alerts → morning digest), delivery, handler wiring.
+  Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
+- `scanner/menu.py`: what the bot shows. Bottom reply keyboard (`MAIN_KEYBOARD`), "/" command list
+  (`BOT_COMMANDS`), inline screens edited in place: `render("<screen>")` for callbacks `m:<screen>:<args>`
+  (home, status, top, card, skipped, logs, settings, tiers, radius, searches, rmsearch) and `act()` for
+  `a:<action>:<args>` (pause/resume, tier ±1, radius, rmsearch). Plain functions returning (HTML, keyboard)
 - `scanner/config_edit.py`: line-level edits of config.yaml (radius, tier pct, searches; validated
   before writing) and market_price edits in prices.json (logged in `price_changes`)
 - `scanner/logs.py`: console + rotating files `data/logs/scanner.log` (INFO) and `errors.log` (WARNING+);
