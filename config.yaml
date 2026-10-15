@@ -1,0 +1,27 @@
+# Search configuration. Secrets live in .env, not here.
+
+bazos:
+  enabled: true
+  location: "56201"      # hlokalita (PSČ Ústí nad Orlicí)
+  radius_km: 60          # humkreis
+  pages: 2               # result pages per search (20 listings each)
+  delay_min: 2.0         # random pause between requests, seconds
+  delay_max: 5.0
+  timeout: 20.0
+  retries: 3
+
+  # price_min/price_max = cenaod/cenado; lower bound ~40 % of the cheapest market price in prices.json
+  searches:
+    # section "mobil"
+    - {name: iphone,          section: mobil, query: "iphone",          price_min: 2000, price_max: 45000}
+    - {name: apple watch,     section: mobil, query: "apple watch",     price_min: 800,  price_max: 15000}
+    - {name: airpods,         section: mobil, query: "airpods",         price_min: 450,  price_max: 10000}
+    - {name: ipad,            section: mobil, query: "ipad",            price_min: 1800, price_max: 15000}
+    # section "pc"
+    - {name: macbook,         section: pc,    query: "macbook",         price_min: 3800, price_max: 45000}
+    - {name: playstation,     section: pc,    query: "playstation",     price_min: 400,  price_max: 32000}
+    - {name: xbox,            section: pc,    query: "xbox",            price_min: 400,  price_max: 20000}
+    - {name: nintendo switch, section: pc,    query: "nintendo switch", price_min: 1000, price_max: 10000}
+    - {name: herní pc,        section: pc,    query: "herní pc",        price_min: 5000, price_max: 60000}
+    - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 20000}
+    - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 20000}

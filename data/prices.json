@@ -1,0 +1,1760 @@
+{
+ "meta": {
+  "source": "Прайс перекупа ČR (Claude artifact), версия от 12.10.2026 + оценки из сессии 15.10.2026",
+  "currency": "CZK",
+  "market_price_meaning": "реальная цена, за которую вещь уходит на Bazoš/FB в нормальном состоянии (не цена объявления)",
+  "default_buy_pct": 72,
+  "buy_rule": "целевая цена покупки = market_price * buy_pct/100, округлить до 100; предлагать ещё ниже на 5-10 %",
+  "liquidity": "1 = продаётся медленно, 3 = уходит за несколько дней",
+  "confidence": "checked = сверено с живыми объявлениями 12.10.2026; estimate = грубая оценка, сверять вручную",
+  "gaming_pc_rule": "готовые ПК оценивать по сумме б/у комплектующих * 0.8 (целиком продаётся дешевле суммы частей); покупать не дороже 72 % от этой оценки"
+ },
+ "items": [
+  {
+   "category": "iphone",
+   "model": "iPhone 13",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    4990,
+    6000
+   ],
+   "fb_range": null,
+   "market_price": 5500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 13 mini",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    4000,
+    6800
+   ],
+   "fb_range": [
+    5000,
+    6500
+   ],
+   "market_price": 5200,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 13 Pro",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    7500,
+    9000
+   ],
+   "fb_range": [
+    7200,
+    7200
+   ],
+   "market_price": 7700,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 13 Pro",
+   "variant": "256 ГБ",
+   "bazos_range": null,
+   "fb_range": [
+    7800,
+    7800
+   ],
+   "market_price": 7800,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 13 Pro Max",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    9000,
+    9500
+   ],
+   "fb_range": [
+    6400,
+    6400
+   ],
+   "market_price": 8000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 14",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    5500,
+    8500
+   ],
+   "fb_range": [
+    5999,
+    5999
+   ],
+   "market_price": 6500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 14 Pro",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    8000,
+    11000
+   ],
+   "fb_range": [
+    9000,
+    9000
+   ],
+   "market_price": 9000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 14 Pro",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    8990,
+    11500
+   ],
+   "fb_range": [
+    8500,
+    9500
+   ],
+   "market_price": 9700,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 14 Pro Max",
+   "variant": "128 ГБ (оценка)",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 10000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 14 Pro Max",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    10500,
+    11590
+   ],
+   "fb_range": [
+    7500,
+    9650
+   ],
+   "market_price": 10300,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 15",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    10000,
+    11990
+   ],
+   "fb_range": [
+    9999,
+    9999
+   ],
+   "market_price": 10000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 15 Plus",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    8500,
+    11500
+   ],
+   "fb_range": [
+    10900,
+    10900
+   ],
+   "market_price": 10000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 15 Pro",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    12490,
+    14000
+   ],
+   "fb_range": [
+    12999,
+    14900
+   ],
+   "market_price": 13000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 15 Pro",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    14500,
+    14500
+   ],
+   "fb_range": [
+    12000,
+    15000
+   ],
+   "market_price": 14000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 15 Pro Max",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    13000,
+    13999
+   ],
+   "fb_range": [
+    13000,
+    14000
+   ],
+   "market_price": 13500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    12500,
+    16990
+   ],
+   "fb_range": [
+    13000,
+    13000
+   ],
+   "market_price": 13000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16e",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    9000,
+    13490
+   ],
+   "fb_range": [
+    10000,
+    10000
+   ],
+   "market_price": 10500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16 Plus",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    14900,
+    14900
+   ],
+   "fb_range": null,
+   "market_price": 14500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16 Pro",
+   "variant": "128 ГБ",
+   "bazos_range": [
+    16500,
+    17900
+   ],
+   "fb_range": [
+    14500,
+    16999
+   ],
+   "market_price": 16500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16 Pro",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    18490,
+    19000
+   ],
+   "fb_range": null,
+   "market_price": 18300,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 16 Pro Max",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    17000,
+    20900
+   ],
+   "fb_range": [
+    18500,
+    18590
+   ],
+   "market_price": 18800,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 17",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    18500,
+    21999
+   ],
+   "fb_range": [
+    17000,
+    19990
+   ],
+   "market_price": 18800,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 17e",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    12000,
+    15990
+   ],
+   "fb_range": [
+    14500,
+    14500
+   ],
+   "market_price": 13700,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone Air",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    14999,
+    18500
+   ],
+   "fb_range": [
+    18500,
+    18500
+   ],
+   "market_price": 17000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 17 Pro",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    23000,
+    26500
+   ],
+   "fb_range": [
+    23500,
+    27000
+   ],
+   "market_price": 24000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 17 Pro Max",
+   "variant": "256 ГБ",
+   "bazos_range": [
+    24500,
+    28900
+   ],
+   "fb_range": [
+    24500,
+    26999
+   ],
+   "market_price": 26000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 17 Pro Max",
+   "variant": "512 ГБ",
+   "bazos_range": [
+    27990,
+    30900
+   ],
+   "fb_range": [
+    28000,
+    28000
+   ],
+   "market_price": 29000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 18 Pro",
+   "variant": "256 ГБ, новый, запечатанный",
+   "bazos_range": [
+    31500,
+    34990
+   ],
+   "fb_range": [
+    33000,
+    34000
+   ],
+   "market_price": 32500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 18 Pro Max",
+   "variant": "256 ГБ, новый, запечатанный",
+   "bazos_range": [
+    39999,
+    39999
+   ],
+   "fb_range": null,
+   "market_price": 39000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "iphone",
+   "model": "iPhone 18 Pro Max",
+   "variant": "512 ГБ, новый, запечатанный",
+   "bazos_range": [
+    39990,
+    46500
+   ],
+   "fb_range": null,
+   "market_price": 42000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M1",
+   "variant": "8 / 256",
+   "bazos_range": [
+    8000,
+    10800
+   ],
+   "fb_range": [
+    9500,
+    11000
+   ],
+   "market_price": 9500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M1",
+   "variant": "16 / 256 (CTO)",
+   "bazos_range": [
+    9200,
+    14980
+   ],
+   "fb_range": [
+    10490,
+    10490
+   ],
+   "market_price": 10500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M2",
+   "variant": "8 / 256",
+   "bazos_range": [
+    11000,
+    14700
+   ],
+   "fb_range": [
+    12990,
+    15000
+   ],
+   "market_price": 12800,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M2",
+   "variant": "16 / 256",
+   "bazos_range": [
+    16900,
+    17980
+   ],
+   "fb_range": null,
+   "market_price": 16500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M2",
+   "variant": "16 / 512",
+   "bazos_range": [
+    17999,
+    21500
+   ],
+   "fb_range": null,
+   "market_price": 17500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 15″ M2",
+   "variant": "8 / 256",
+   "bazos_range": [
+    16900,
+    17000
+   ],
+   "fb_range": [
+    17490,
+    17490
+   ],
+   "market_price": 16300,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M3",
+   "variant": "8 / 256",
+   "bazos_range": [
+    16000,
+    17500
+   ],
+   "fb_range": [
+    16000,
+    16000
+   ],
+   "market_price": 16000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M3",
+   "variant": "16 / 256 (оценка)",
+   "bazos_range": [
+    21900,
+    21900
+   ],
+   "fb_range": null,
+   "market_price": 18500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M3",
+   "variant": "16 / 512",
+   "bazos_range": [
+    19000,
+    23000
+   ],
+   "fb_range": null,
+   "market_price": 20500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 15″ M3",
+   "variant": "8 / 256",
+   "bazos_range": [
+    19000,
+    19500
+   ],
+   "fb_range": null,
+   "market_price": 19500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 15″ M3",
+   "variant": "16 / 512",
+   "bazos_range": [
+    22500,
+    24500
+   ],
+   "fb_range": [
+    25000,
+    25000
+   ],
+   "market_price": 23000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M4",
+   "variant": "16 / 256",
+   "bazos_range": [
+    21999,
+    22999
+   ],
+   "fb_range": null,
+   "market_price": 21000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M4",
+   "variant": "16 / 512",
+   "bazos_range": [
+    28000,
+    28000
+   ],
+   "fb_range": null,
+   "market_price": 24000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 15″ M4",
+   "variant": "16 / 256",
+   "bazos_range": [
+    23500,
+    25900
+   ],
+   "fb_range": null,
+   "market_price": 24500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Air 13″ M5",
+   "variant": "16 / 512 (2026)",
+   "bazos_range": [
+    27000,
+    30990
+   ],
+   "fb_range": null,
+   "market_price": 28000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 13″ M1",
+   "variant": "8–16 / 256–512",
+   "bazos_range": [
+    7500,
+    14500
+   ],
+   "fb_range": [
+    12000,
+    14990
+   ],
+   "market_price": 10800,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M1 Pro",
+   "variant": "16 / 512",
+   "bazos_range": [
+    15500,
+    19000
+   ],
+   "fb_range": [
+    19000,
+    19500
+   ],
+   "market_price": 18000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 16″ M1 Pro",
+   "variant": "16 / 512",
+   "bazos_range": [
+    21900,
+    21900
+   ],
+   "fb_range": null,
+   "market_price": 21500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14–16″ M1 Max",
+   "variant": "32 / 512",
+   "bazos_range": [
+    27900,
+    30900
+   ],
+   "fb_range": [
+    29990,
+    30900
+   ],
+   "market_price": 29000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M2 Pro",
+   "variant": "16 / 512 (база)",
+   "bazos_range": null,
+   "fb_range": [
+    20990,
+    21390
+   ],
+   "market_price": 21000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 16″ M2 Pro",
+   "variant": "16 / 512 (база)",
+   "bazos_range": [
+    21500,
+    21500
+   ],
+   "fb_range": [
+    23290,
+    23990
+   ],
+   "market_price": 22800,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M2 Pro",
+   "variant": "32 / 1 ТБ",
+   "bazos_range": [
+    27500,
+    27500
+   ],
+   "fb_range": null,
+   "market_price": 28000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 16″ M2 Max",
+   "variant": "32 / 1 ТБ",
+   "bazos_range": [
+    32900,
+    35900
+   ],
+   "fb_range": null,
+   "market_price": 33500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M3",
+   "variant": "8 / 512",
+   "bazos_range": [
+    25000,
+    28500
+   ],
+   "fb_range": null,
+   "market_price": 25500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M3 Pro",
+   "variant": "18 / 512",
+   "bazos_range": [
+    27400,
+    29990
+   ],
+   "fb_range": null,
+   "market_price": 28000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M4",
+   "variant": "16 / 512",
+   "bazos_range": [
+    33900,
+    33900
+   ],
+   "fb_range": null,
+   "market_price": 32500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 14″ M4 Pro",
+   "variant": "24 / 1 ТБ",
+   "bazos_range": [
+    39900,
+    39900
+   ],
+   "fb_range": null,
+   "market_price": 41000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "macbook",
+   "model": "MacBook Pro 16″ M4 Pro",
+   "variant": "24 / 512",
+   "bazos_range": [
+    39990,
+    47990
+   ],
+   "fb_range": null,
+   "market_price": 42000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch SE (1 gen)",
+   "variant": "40 / 44 мм",
+   "bazos_range": [
+    2000,
+    2500
+   ],
+   "fb_range": [
+    1100,
+    1850
+   ],
+   "market_price": 2000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch SE 2",
+   "variant": "40 / 44 мм",
+   "bazos_range": [
+    2400,
+    3900
+   ],
+   "fb_range": [
+    2500,
+    2500
+   ],
+   "market_price": 2900,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch SE 3",
+   "variant": "40 / 44 мм",
+   "bazos_range": [
+    4500,
+    5200
+   ],
+   "fb_range": [
+    4500,
+    4500
+   ],
+   "market_price": 4500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 6",
+   "variant": "44 мм",
+   "bazos_range": [
+    3000,
+    3000
+   ],
+   "fb_range": [
+    2000,
+    2500
+   ],
+   "market_price": 2300,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 7",
+   "variant": "41 / 45 мм",
+   "bazos_range": [
+    4000,
+    4499
+   ],
+   "fb_range": [
+    2300,
+    4000
+   ],
+   "market_price": 3000,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 8",
+   "variant": "41 / 45 мм алюминий",
+   "bazos_range": [
+    2500,
+    4200
+   ],
+   "fb_range": [
+    3290,
+    3290
+   ],
+   "market_price": 3400,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 8/9",
+   "variant": "нерж. сталь",
+   "bazos_range": [
+    5200,
+    7000
+   ],
+   "fb_range": [
+    6300,
+    6300
+   ],
+   "market_price": 6300,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 9",
+   "variant": "41 / 45 мм",
+   "bazos_range": [
+    3000,
+    5500
+   ],
+   "fb_range": [
+    6000,
+    6000
+   ],
+   "market_price": 4300,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 10",
+   "variant": "46 мм",
+   "bazos_range": [
+    4700,
+    6800
+   ],
+   "fb_range": null,
+   "market_price": 5300,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 11",
+   "variant": "42 / 46 мм",
+   "bazos_range": [
+    7000,
+    8980
+   ],
+   "fb_range": null,
+   "market_price": 7500,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Series 12",
+   "variant": "42 мм GPS, новый",
+   "bazos_range": [
+    9990,
+    9990
+   ],
+   "fb_range": null,
+   "market_price": 9500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Ultra 1",
+   "variant": "49 мм",
+   "bazos_range": [
+    8000,
+    8000
+   ],
+   "fb_range": [
+    7500,
+    7500
+   ],
+   "market_price": 7500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Ultra 2",
+   "variant": "49 мм",
+   "bazos_range": [
+    8900,
+    10900
+   ],
+   "fb_range": [
+    9500,
+    9500
+   ],
+   "market_price": 9500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "apple_watch",
+   "model": "Apple Watch Ultra 3",
+   "variant": "49 мм",
+   "bazos_range": [
+    12999,
+    16490
+   ],
+   "fb_range": [
+    13000,
+    14900
+   ],
+   "market_price": 13800,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods 2",
+   "variant": "2019, Lightning",
+   "bazos_range": [
+    900,
+    1500
+   ],
+   "fb_range": [
+    1000,
+    1500
+   ],
+   "market_price": 1100,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods 3",
+   "variant": "MagSafe / USB-C",
+   "bazos_range": [
+    999,
+    1600
+   ],
+   "fb_range": [
+    1400,
+    1800
+   ],
+   "market_price": 1500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods 4",
+   "variant": "без ANC",
+   "bazos_range": [
+    1100,
+    2200
+   ],
+   "fb_range": [
+    1300,
+    2300
+   ],
+   "market_price": 1700,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods 4",
+   "variant": "с ANC",
+   "bazos_range": [
+    1900,
+    3500
+   ],
+   "fb_range": [
+    2700,
+    3000
+   ],
+   "market_price": 2700,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods 5",
+   "variant": "ANC, 2026",
+   "bazos_range": [
+    3000,
+    3100
+   ],
+   "fb_range": null,
+   "market_price": 3000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Pro 1",
+   "variant": "2019–2021",
+   "bazos_range": [
+    990,
+    1500
+   ],
+   "fb_range": [
+    1399,
+    1500
+   ],
+   "market_price": 1200,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Pro 2",
+   "variant": "Lightning / USB-C",
+   "bazos_range": [
+    2500,
+    4200
+   ],
+   "fb_range": [
+    1900,
+    3000
+   ],
+   "market_price": 2700,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Pro 3",
+   "variant": "2025",
+   "bazos_range": [
+    2700,
+    4999
+   ],
+   "fb_range": null,
+   "market_price": 3300,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Max",
+   "variant": "1 gen, Lightning",
+   "bazos_range": [
+    4000,
+    5500
+   ],
+   "fb_range": null,
+   "market_price": 5000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Max",
+   "variant": "USB-C, 2024",
+   "bazos_range": [
+    6990,
+    6990
+   ],
+   "fb_range": [
+    7500,
+    7500
+   ],
+   "market_price": 6800,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "AirPods Max 2",
+   "variant": "H2, апрель 2026",
+   "bazos_range": null,
+   "fb_range": [
+    9000,
+    9500
+   ],
+   "market_price": 9300,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "airpods",
+   "model": "Одно ухо / кейс отдельно",
+   "variant": "замена потерянного",
+   "bazos_range": [
+    900,
+    1400
+   ],
+   "fb_range": [
+    1000,
+    1500
+   ],
+   "market_price": 1200,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 4 Slim",
+   "variant": "500 ГБ / 1 ТБ",
+   "bazos_range": [
+    3500,
+    4500
+   ],
+   "fb_range": [
+    2500,
+    3500
+   ],
+   "market_price": 3400,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 4 Pro",
+   "variant": "1 ТБ",
+   "bazos_range": [
+    4900,
+    5000
+   ],
+   "fb_range": [
+    4900,
+    4900
+   ],
+   "market_price": 4600,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 5 (с приводом)",
+   "variant": "825 ГБ, CFI-1xxx",
+   "bazos_range": [
+    12000,
+    13900
+   ],
+   "fb_range": [
+    8000,
+    12000
+   ],
+   "market_price": 11000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 5 Slim Digital",
+   "variant": "825 ГБ – 1 ТБ",
+   "bazos_range": [
+    10990,
+    14000
+   ],
+   "fb_range": [
+    10000,
+    14990
+   ],
+   "market_price": 11800,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 5 Slim (привод)",
+   "variant": "1 ТБ",
+   "bazos_range": [
+    10000,
+    13900
+   ],
+   "fb_range": [
+    11000,
+    14500
+   ],
+   "market_price": 12500,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation 5 Pro",
+   "variant": "2 ТБ",
+   "bazos_range": [
+    29900,
+    36990
+   ],
+   "fb_range": [
+    29000,
+    29000
+   ],
+   "market_price": 31000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "PlayStation Portal",
+   "variant": "—",
+   "bazos_range": [
+    3450,
+    4200
+   ],
+   "fb_range": null,
+   "market_price": 3700,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "playstation",
+   "model": "DualSense (контроллер)",
+   "variant": "новый / б/у",
+   "bazos_range": [
+    790,
+    1300
+   ],
+   "fb_range": null,
+   "market_price": 1000,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox Series X",
+   "variant": "1 ТБ, с приводом",
+   "bazos_range": [
+    16999,
+    18490
+   ],
+   "fb_range": [
+    14999,
+    18500
+   ],
+   "market_price": 16000,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox Series X",
+   "variant": "2 ТБ + Elite, комплект",
+   "bazos_range": null,
+   "fb_range": [
+    19500,
+    19500
+   ],
+   "market_price": 18500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox Series S",
+   "variant": "512 ГБ",
+   "bazos_range": [
+    5500,
+    8900
+   ],
+   "fb_range": [
+    4500,
+    8000
+   ],
+   "market_price": 6600,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox Series S",
+   "variant": "1 ТБ",
+   "bazos_range": null,
+   "fb_range": [
+    7000,
+    7000
+   ],
+   "market_price": 7200,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox One X",
+   "variant": "1 ТБ",
+   "bazos_range": [
+    3000,
+    5500
+   ],
+   "fb_range": null,
+   "market_price": 3800,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox One S",
+   "variant": "1 ТБ",
+   "bazos_range": [
+    3500,
+    3500
+   ],
+   "fb_range": [
+    3500,
+    3500
+   ],
+   "market_price": 3300,
+   "liquidity": 2,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox One S",
+   "variant": "500 ГБ",
+   "bazos_range": [
+    2499,
+    3500
+   ],
+   "fb_range": [
+    3000,
+    3000
+   ],
+   "market_price": 2900,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Xbox 360",
+   "variant": "с играми, комплект",
+   "bazos_range": [
+    1200,
+    4300
+   ],
+   "fb_range": null,
+   "market_price": 2500,
+   "liquidity": 1,
+   "confidence": "checked"
+  },
+  {
+   "category": "xbox",
+   "model": "Геймпад Xbox",
+   "variant": "Series / One, USB-C",
+   "bazos_range": [
+    690,
+    1300
+   ],
+   "fb_range": null,
+   "market_price": 800,
+   "liquidity": 3,
+   "confidence": "checked"
+  },
+  {
+   "category": "nintendo",
+   "model": "Nintendo Switch OLED",
+   "variant": "64 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 5500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "nintendo",
+   "model": "Nintendo Switch V2 (2019+, červená krabice)",
+   "variant": "32 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3800,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "nintendo",
+   "model": "Nintendo Switch V1 (2017)",
+   "variant": "32 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 3000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "nintendo",
+   "model": "Nintendo Switch Lite",
+   "variant": "32 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 2700,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "nintendo",
+   "model": "Nintendo Switch 2",
+   "variant": "256 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 9000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3060",
+   "variant": "12 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 6000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3060",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4800,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3060 Ti",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 6800,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3070",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3070 Ti",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8300,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3080",
+   "variant": "10 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 10500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 3080 Ti",
+   "variant": "12 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 13500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4060",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 7000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4060 Ti",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 4070 Super",
+   "variant": "12 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 14000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RTX 5060",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 6600 / 6600 XT",
+   "variant": "8 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 6700 XT",
+   "variant": "12 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 6500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "gpu",
+   "model": "RX 9060 XT",
+   "variant": "16 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 9000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad 9. gen",
+   "variant": "64 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 4500,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad 10. gen",
+   "variant": "64 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 6500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad (A16)",
+   "variant": "128 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad Air M1 (5. gen)",
+   "variant": "64 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 8000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad Air M2 11\"",
+   "variant": "128 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 11500,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "category": "ipad",
+   "model": "iPad Pro 11\" M1/M2",
+   "variant": "128 GB",
+   "bazos_range": null,
+   "fb_range": null,
+   "market_price": 12000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  }
+ ]
+}

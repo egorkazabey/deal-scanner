@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<title>Mobily - Ústí nad Orlicí 1 - Iphone bazar | Bazoš.cz</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="description" content="Mobily - Iphone - Ústí nad Orlicí 1 bazar zdarma. Vybírejte z 253 inzerátů. Prodej snadno a rychle na Bazoši. Přes půl milionů uživatelů za den."><meta property="og:title" content="Mobily - Ústí nad Orlicí 1 - Iphone bazar">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Bazos.cz">
+<meta property="og:description" content="Mobily - Iphone - Ústí nad Orlicí 1 bazar zdarma. Vybírejte z 253 inzerátů. Prodej snadno a rychle na Bazoši. Přes půl milionů uživatelů za den.">
+<link rel="canonical" href="https://mobil.bazos.cz/?hledat=iphone&rubriky=mobil&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000"><meta property="fb:admins" content="1055875657">
+<meta name="ROBOTS" content="NOINDEX">
+<link rel="stylesheet" href="https://www.bazos.cz/bazos67s.css" type="text/css"><link rel="preload" as="image" href="https://www.bazos.cz/obrazky/bazos.svg">
+<link rel="stylesheet" href="https://www.bazos.cz/bazosprint.css" type="text/css" media="print">
+<link rel="icon" href="https://www.bazos.cz/favicon.svg" type="image/svg+xml">
+<link rel="icon" HREF="https://www.bazos.cz/favicon.ico" sizes="32x32">
+<link rel="apple-touch-icon" href="https://www.bazos.cz/apple-touch-icon.png">
+<script async="async" src="https://www.google.com/adsense/search/ads.js"></script>
+<script type="text/javascript" charset="utf-8">
+(function(g,o){g[o]=g[o]||function(){(g[o]['q']=g[o]['q']||[]).push(
+  arguments)},g[o]['t']=1*new Date})(window,'_googCsa');
+</script><script>
+var xhr = new XMLHttpRequest();
+var naseptavac_value = '';
+function naseptavac(value) {
+  if (value=='')  {
+  	naseptavac_value = '';
+  	document.getElementById('vysledek').innerHTML='';
+  	}
+else {
+	if (naseptavac_value == value) {
+		return false;
+	}
+	naseptavac_value = value;
+	setTimeout(function () {
+		if (naseptavac_value != value) {
+			return false;
+		}
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4 && naseptavac_value == value){
+				document.getElementById('vysledek').innerHTML = this.responseText;
+			}
+ 		 };
+		xhr.open("POST", '/suggest.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('rubnas=MO&catnas=&qnas='+encodeURIComponent(naseptavac_value));
+	}, 250);
+}
+}
+
+var naseptavacpsc_value = '';
+function naseptavacpsc(value) {
+  if (value=='')  {
+  	naseptavacpsc_value = '';
+  	document.getElementById('vysledekpsc').innerHTML='<table cellpadding=\"3\" cellspacing=\"0\" class=\"tablenaspsc\"><tr><td class=\"act\" onclick=\"getLocation();\"><b>Inzeráty v okolí</b></td></tr></table>';
+  	}
+else {
+	if (naseptavacpsc_value == value) {
+		return false;
+	}
+	naseptavacpsc_value = value;
+	setTimeout(function () {
+		if (naseptavacpsc_value != value) {
+			return false;
+		}
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4 && naseptavacpsc_value == value){
+				document.getElementById('vysledekpsc').innerHTML = this.responseText;
+			}
+ 		 };
+		xhr.open("POST", '/suggestpsc.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('qnaspsc='+encodeURIComponent(naseptavacpsc_value));
+	}, 250);
+}
+}
+
+function getLocation() {
+if (navigator.geolocation) {navigator.geolocation.getCurrentPosition(showPosition);}
+else {document.getElementById('hlokalita').value = '';}
+}
+function showPosition(position) {
+		xhr.onreadystatechange = function() {
+ 		 if (this.readyState == 4){
+				document.getElementById('hlokalita').value = this.responseText;
+				document.forms['formt'].submit();
+			}
+ 		 };
+		xhr.open("POST", '/zip.php');
+		xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+		xhr.send('latitude='+encodeURIComponent(position.coords.latitude)+'&longitude='+encodeURIComponent(position.coords.longitude));
+}
+
+var agent_value = '';
+function agentclick() {
+  if (document.getElementById('agentmail').value=='')  {
+  	document.getElementById("agentmail").focus();
+    return false;
+  	}
+else {
+agent_value = document.getElementById('agentmail').value;
+xhr.onreadystatechange = function() {
+  if (this.readyState == 4){
+				document.getElementById('overlay').innerHTML = this.responseText;
+			}
+  };
+xhr.open("POST", '/agent.php');
+xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+xhr.send('hledat=iphone&rubrikav=MO&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&cat=&typ=&agentmail='+encodeURIComponent(agent_value));
+}
+}
+
+function odeslatrequest(value,params) {
+xhr.onreadystatechange = function() {
+  if (this.readyState == 4){
+				document.getElementById('overlay').innerHTML = this.responseText;
+			}
+  };
+xhr.open("POST", value);
+xhr.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+xhr.send(params);
+}
+function overlay() {
+	el = document.getElementById("overlay");
+	el.style.display = (el.style.display == "inline") ? "none" : "inline";
+}
+function odeslatakci(postaction,value1,value2,value3) {
+document.getElementById('postaction').value = postaction;
+document.getElementById("postv1").value = value1;
+document.getElementById("postv2").value = value2;
+document.getElementById("postv3").value = value3;
+document.formaction.submit();
+}
+</script>
+</head>
+
+<body>
+
+
+<div class="sirka">
+<div class="listalogor">
+<div class="listalogol"><a href="https://www.bazos.cz/" title="Bazos.cz - Inzerce, bazar"><img src="https://www.bazos.cz/obrazky/bazos.svg" width="199" height="34" alt="Bazos.cz - Inzerce, inzeráty"></a></div>
+<div class="listalogom"><b>... bazar pro každého</b></div>
+<div class="listalogop"><a href="https://www.bazos.cz/oblibene.php"><b>Oblíbené inzeráty</b></a> <a href="https://www.bazos.cz/moje-inzeraty.php"><b>Moje inzeráty</b></a> <a href="/pridat-inzerat.php"><b><span class=pridati>Přidat inzerát</span></b></a></div>
+</div>
+<form name="formt" id="formt" method=get >
+<div class="listah">
+<div class="rubriky">
+<b>
+Co: <span class=vysokoli><span id="vysledek"></span><input type="search" onkeyup="naseptavac(this.value);" id=hledat name=hledat size="17" maxlength="256" value="iphone" autocomplete="off" title="Co? Vyhledávaný výraz"></span>
+
+<select name="rubriky" onchange='this.form.submit();' title="Vyber rubriku">
+<option value="www">Všechny rubriky</option>
+<option value="auto">Auto</option><option value="deti">Děti</option><option value="dum">Dům a zahrada</option><option value="elektro">Elektro</option><option value="foto">Foto</option><option value="hudba">Hudba</option><option value="knihy">Knihy</option><option value="mobil" selected>Mobily</option><option value="motorky">Motorky</option><option value="nabytek">Nábytek</option><option value="obleceni">Oblečení</option><option value="pc">PC</option><option value="prace">Práce</option><option value="reality">Reality</option><option value="sluzby">Služby</option><option value="sport">Sport</option><option value="stroje">Stroje</option><option value="vstupenky">Vstupenky</option><option value="zvirata">Zvířata</option><option value="ostatni">Ostatní</option></select>
+
+Lokalita: <span class=vysokolipsc><span id="vysledekpsc"></span><input type="search" name="hlokalita" id="hlokalita" onkeyup="naseptavacpsc(this.value);" onclick="naseptavacpsc(this.value);" value="56201" size="4" maxlength="25" autocomplete="off" title="Kde? PSČ (místo)" style="-webkit-appearance: none;"></span>
+Okolí: <input name="humkreis" title="Okolí v km" value="60" size="3" style="width: 25px;"> km
+Cena od: <input name=cenaod title="Cena od Kč" maxlength="12" size="5" value="2000"> - do: <input name=cenado title="Cena do Kč" maxlength="12" size="5" value="45000"> Kč <input type="submit" name="Submit" value="Hledat">
+<input type="hidden" name="order" id="order"><input type="hidden" name="crp" id="crp"><input type="hidden" id="kitx" name="kitx" value="ano"></b>
+</div>
+</div>
+</form>
+<div class="drobky"><a href="https://www.bazos.cz/" title="Inzerce Bazoš">Hlavní stránka</a>  > <a href="https://mobil.bazos.cz">Mobily</a> > <h1 class="nadpiskategorie">Ústí nad Orlicí - Ústí nad Orlicí 1</h1></div>
+<br>
+
+
+<div class="flexmain"><div class="menuleft"><div class="nadpismenu">Kategorie</div>
+<div class="barvalmenu">
+<div class="barvaleva">
+<a href="/apple/" onclick="document.getElementById('formt').action = '/apple/';document.forms['formt'].submit();return false;">Apple</a>
+<a href="/google/" onclick="document.getElementById('formt').action = '/google/';document.forms['formt'].submit();return false;">Google</a>
+<a href="/huawei/" onclick="document.getElementById('formt').action = '/huawei/';document.forms['formt'].submit();return false;">Huawei, Honor</a>
+<a href="/motorola/" onclick="document.getElementById('formt').action = '/motorola/';document.forms['formt'].submit();return false;">Motorola, Lenovo</a>
+<a href="/nokia/" onclick="document.getElementById('formt').action = '/nokia/';document.forms['formt'].submit();return false;">Nokia, Microsoft</a>
+<a href="/realme/" onclick="document.getElementById('formt').action = '/realme/';document.forms['formt'].submit();return false;">Realme</a>
+<a href="/samsung/" onclick="document.getElementById('formt').action = '/samsung/';document.forms['formt'].submit();return false;">Samsung</a>
+<a href="/ericsson/" onclick="document.getElementById('formt').action = '/ericsson/';document.forms['formt'].submit();return false;">Sony</a>
+<a href="/xiaomi/" onclick="document.getElementById('formt').action = '/xiaomi/';document.forms['formt'].submit();return false;">Xiaomi</a>
+<a href="/mobily/" onclick="document.getElementById('formt').action = '/mobily/';document.forms['formt'].submit();return false;">Ostatní značky</a>
+</div></div>
+<br>
+<div class="nadpismenu">Příslušenství</div>
+<div class="barvalmenu">
+<div class="barvaleva">
+<a href="/baterie/" onclick="document.getElementById('formt').action = '/baterie/';document.forms['formt'].submit();return false;">Baterie</a>
+<a href="/bezdratove/" onclick="document.getElementById('formt').action = '/bezdratove/';document.forms['formt'].submit();return false;">Bezdrátové telefony</a>
+<a href="/kabely/" onclick="document.getElementById('formt').action = '/kabely/';document.forms['formt'].submit();return false;">Datové kabely</a>
+<a href="/faxy/" onclick="document.getElementById('formt').action = '/faxy/';document.forms['formt'].submit();return false;">Faxy</a>
+<a href="https://pc.bazos.cz/gps/">GPS navigace</a>
+<a href="/headsety/" onclick="document.getElementById('formt').action = '/headsety/';document.forms['formt'].submit();return false;">Headsety</a>
+<a href="/hf/" onclick="document.getElementById('formt').action = '/hf/';document.forms['formt'].submit();return false;">HF Sady do auta</a>
+<a href="/smartwatch/" onclick="document.getElementById('formt').action = '/smartwatch/';document.forms['formt'].submit();return false;">Chytré hodinky</a>
+<a href="/kryty/" onclick="document.getElementById('formt').action = '/kryty/';document.forms['formt'].submit();return false;">Kryty</a>
+<a href="/nabijecky/" onclick="document.getElementById('formt').action = '/nabijecky/';document.forms['formt'].submit();return false;">Nabíječky</a>
+<a href="/karty/" onclick="document.getElementById('formt').action = '/karty/';document.forms['formt'].submit();return false;">Paměťové karty</a>
+<a href="/telefony/" onclick="document.getElementById('formt').action = '/telefony/';document.forms['formt'].submit();return false;">Stolní telefony</a>
+<a href="/ostatni/" onclick="document.getElementById('formt').action = '/ostatni/';document.forms['formt'].submit();return false;">Ostatní</a>
+</div></div>
+
+
+
+<br><div class="mobilskryt" style="text-align: center;">
+<a style="font-size: 13px;text-decoration: none;color:#000000;" href="https://www.jasminka.cz/kniha/jiri-janca-josef-a-zentrich-herbar-lecivych-rostlin-komplet-1-7dil.html" target="_blank" rel=”nofollow”><b>Knihkupectví Jasmínka</b><br>
+<span style="font-size: 13px;text-decoration: none;color:#ff6600;">
+<span style="color:#000000;">Jiří Janča, Josef A. Zentrich:</span> Herbář léčivých rostlin - komplet 1.-7.díl<br><img src="https://www.jasminka.cz/images/v/herbarcv.jpg" width="100" alt="Knihkupectví Jasmínka" title="Knihkupectví Jasmínka" style="border: 1px solid Black;margin: 4px;">
+<br>
+<img src="https://www.bazos.cz/kosik.svg" alt="Jasminka" height="22" style="border: 0px;"> koupit</span></a></div>
+
+</div><div class="maincontent">
+
+
+<div class="listainzerat inzeratyflex">
+<div class="inzeratynadpis"><img src="https://www.bazos.cz/obrazky/list.gif" width="18" height="16" alt="List inzerátů" class=gallerylista> <form name="formgal" id="formgal" method="post" style="display: inline;"><input type="hidden" name="gal" value="g"><input type="image" alt="Submit" src="https://www.bazos.cz/obrazky/gallery.gif" width="18" height="16" class="gallerylist inputgal"></form> Zobrazeno 1-20 inzerátů z 253</div>
+<div class="inzeratycena"><b><span onclick="document.getElementById('order').value=1;document.forms['formt'].submit();" class="paction">Cena</span></b></div>
+<div class="inzeratylok">Lokalita</div>
+<div class="inzeratyview"><span onclick="document.getElementById('order').value=3;document.forms['formt'].submit();" class="paction">Zobrazeno</span></div>
+</div><form name="formaction" method="post" style="display: inline;"><input type="hidden" id="postaction" name="postaction" value=""><input type="hidden" id="postv1" name="postv1" value=""><input type="hidden" id="postv2" name="postv2" value=""><input type="hidden" id="postv3" name="postv3" value=""></form><button type="button" onclick="odeslatrequest('/agent.php','teloverit=');overlay();">Nové inzeráty e-mailem</button>
+	<div id="overlay">
+     <div></div>
+</div>
+
+<div id="container_one"></div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225124379/iphone-14-128gb-stav-a-nova-baterie-zaruka.php"><img src="https://www.bazos.cz/img/1t/379/225124379.jpg?t=1792059854" class="obrazek" alt="iPhone 14 128GB - stav A-, nová baterie, záruka" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225124379/iphone-14-128gb-stav-a-nova-baterie-zaruka.php">iPhone 14 128GB - stav A-, nová baterie, záruka</a></h2><span class=velikost10> - <span title="TOP 1x Platí do 22.10. 2026" class="ztop">TOP</span> - [15.10. 2026]</span><br>
+<div class=popis>Nabízím k prodeji plně funkční <b>iphone</b> 14 s novou baterií a roční zárukou. 
+
+Telefon dodávám s krabičkou. 
+
+Osobní vyzvednutí na naší provozovně (Servis mobilních telefonů Svitavy, náměstí míru 55/53 vedle Tety). 
+
+Telefon je v hezkém stavu, na  ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  6 990 Kč</span></b></div>
+<div class="inzeratylok">Svitavy<br>568 02</div>
+<div class="inzeratyview">29 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225124379');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225124379');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','13679778','16829715','Servis+mobiln%C3%ADch+telefon%C5%AF+Svitavy');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225124379');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/224948628/iphone-13-pro-128-gb.php"><img src="https://www.bazos.cz/img/1t/628/224948628.jpg?t=1791734046" class="obrazek" alt="IPhone 13 Pro 128 gb" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/224948628/iphone-13-pro-128-gb.php">IPhone 13 Pro 128 gb</a></h2><span class=velikost10> - <span title="TOP 1x Platí do 18.10. 2026" class="ztop">TOP</span> - [15.10. 2026]</span><br>
+<div class=popis>Prodám tento telefon z důvodu zakoupení novějšího. Telefon je ve skvělém stavu. Po celou dobu v obalu a s ochranným sklem. Bez škrábanců. Baterie 82% kapacita</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  7 500 Kč</span></b></div>
+<div class="inzeratylok">Hradec Králové<br>503 03</div>
+<div class="inzeratyview">272 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','224948628');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','224948628');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','7978025','40293','Mirek');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','224948628');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/224792556/iphone-16pro-256gb-top-stav-bez-skabanecku.php"><img src="https://www.bazos.cz/img/1t/556/224792556.jpg?t=1791727470" class="obrazek" alt="Iphone 16pro 256gb TOP STAV bez škábanečků" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/224792556/iphone-16pro-256gb-top-stav-bez-skabanecku.php">Iphone 16pro 256gb TOP STAV bez škábanečků</a></h2><span class=velikost10> - <span title="TOP 1x Platí do 18.10. 2026" class="ztop">TOP</span> - [15.10. 2026]</span><br>
+<div class=popis>K prodeji 2x <b>iphone</b> 16 Pro (lze prodat i jednotlivě).
+
+Paměť: 256 gb
+Kondice baterií: 89% a 90%
+Barva: Pouštní titan
+
+Oba nošeny v obalu s ochrannými sklíčky jak na displejích, tak na čočkách fotoaparátů.
+Na obou telefonech není ani jeden škrá ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  19 000 Kč</span></b></div>
+<div class="inzeratylok">Olomouc<br>783 91</div>
+<div class="inzeratyview">268 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','224792556');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','224792556');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','630419','138','BezvaCars');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','224792556');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/224869884/iphone-13-pro-max-128gb-100-baterie-zaruka.php"><img src="https://www.bazos.cz/img/1t/884/224869884.jpg?t=1791563820" class="obrazek" alt="iPhone 13 Pro Max 128GB – 100% baterie, záruka" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/224869884/iphone-13-pro-max-128gb-100-baterie-zaruka.php">iPhone 13 Pro Max 128GB – 100% baterie, záruka</a></h2><span class=velikost10> - <span title="TOP 1x Platí do 16.10. 2026" class="ztop">TOP</span> - [15.10. 2026]</span><br>
+<div class=popis>Prodám <b>iphone</b> 13 Pro Max 128 GB. Telefon je plně funkční, vše funguje bez problémů a je připravený k okamžitému používání.
+
+Stav:
+-  Telefon je bez prasklin.
+-  Kondice baterie: 100 % (baterie není originální Apple).
+-  Telefon byl zakoupen přes ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  8 200 Kč</span></b></div>
+<div class="inzeratylok">Náchod<br>549 01</div>
+<div class="inzeratyview">323 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','224869884');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','224869884');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','9178444','7248656','Michal');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','224869884');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/224829803/iphone-16-128-gb.php"><img src="https://www.bazos.cz/img/1t/803/224829803.jpg?t=1791479611" class="obrazek" alt="IPhone 16 - 128 GB" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/224829803/iphone-16-128-gb.php">IPhone 16 - 128 GB</a></h2><span class=velikost10> - <span title="TOP 1x Platí do 15.10. 2026" class="ztop">TOP</span> - [15.10. 2026]</span><br>
+<div class=popis>Prodám velice hezký - vzhledem jako nový <b>iphone</b> 16, 128 GB
+
+Komplet baleni 
+2 ochranné kryty v cene 
+
+Kapacita baterie 89%
+
+Cena pevná.
+Preferuji osobní predání</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  12 500 Kč</span></b></div>
+<div class="inzeratylok">Rychnov nad Kněžnou<br>516 01</div>
+<div class="inzeratyview">403 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','224829803');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','224829803');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18545943','17512802','Ale%C5%A1+Z%C3%A1rybnick%C3%BD');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','224829803');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225125386/apple-iphone-16-pro.php"><img src="https://www.bazos.cz/img/1t/386/225125386.jpg" class="obrazek" alt="apple iphone 16 pro" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225125386/apple-iphone-16-pro.php">apple iphone 16 pro</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>📱 <b>iphone</b> 16 Pro 128 GB
+
+✨ Stav vizuálně dle fotek
+💬 Více informací ve zprávách
+
+#<b>iphone</b> #<b>iphone</b>16pro #apple #secondhand #preowned #bazar #dobrakoupe #fashiondeal #goodprice #sleva #vyprodej #likeNew #goodcondition #tech #apple<b>iphone</b> #elektronika #mob ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  17 999 Kč</span></b></div>
+<div class="inzeratylok">Ústí nad Orlicí<br>562 01</div>
+<div class="inzeratyview">28 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225125386');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225125386');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','8890648','6917467','iphone');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225125386');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225125297/iphone-14-pro-128gb-vesmirne-cerna-esim.php"><img src="https://www.bazos.cz/img/1t/297/225125297.jpg" class="obrazek" alt="iPhone 14 Pro 128GB vesmírně černá (eSIM)" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225125297/iphone-14-pro-128gb-vesmirne-cerna-esim.php">iPhone 14 Pro 128GB vesmírně černá (eSIM)</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Prodám <b>iphone</b> 14 Pro kupovaný před třemi lety. Přední i zadní zadní fotoaparát bez škrábanců. Displej poškrábaný (nošený bez ochraného skla). Kondice baterie 84% (není nutná výměna). Žádná závada na telefonu není (mimo škrábanců). Osobní předání Jese ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  7 500 Kč</span></b></div>
+<div class="inzeratylok">Jeseník<br>790 01</div>
+<div class="inzeratyview">18 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225125297');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225125297');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','9401781','6794746','Jakub+Medek');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225125297');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225123399/apple-iphone-13-mini.php"><img src="https://www.bazos.cz/img/1t/399/225123399.jpg" class="obrazek" alt="Apple iPhone 13 mini" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225123399/apple-iphone-13-mini.php">Apple iPhone 13 mini</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Prodám po dceři, vyměněná baterie, kondice 100%, v pěkném stavu.
+
+Preferuji osobní převzetí v Pardubicích.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  4 500 Kč</span></b></div>
+<div class="inzeratylok">Pardubice<br>530 02</div>
+<div class="inzeratyview">23 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225123399');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225123399');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18600254','7613422','Nikol');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225123399');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225120695/iphone-17-pro-256gb-kosmicky-oranzova-novy-nerozbaleny.php"><img src="https://www.bazos.cz/img/1t/695/225120695.jpg?t=1792054099" class="obrazek" alt="iPhone 17 Pro 256GB kosmicky oranžová - nový, nerozbalený" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225120695/iphone-17-pro-256gb-kosmicky-oranzova-novy-nerozbaleny.php">iPhone 17 Pro 256GB kosmicky oranžová - nový, nerozbalený</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Prodám zbrusu nový, neotevřený <b>iphone</b> 17 Pro 256GB v oranžové barvě.
+
+Plná záruka - telefon byl zakoupen v říjnu 2026 na eshopu alza.sk
+
+Zadarmo dám k telefonu nový nabíjecí adaptér - AlzaPower Apex G560 35W Biela
+
+Pouze osobní předání - po roz ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  25 000 Kč</span></b></div>
+<div class="inzeratylok">Blansko<br>680 01</div>
+<div class="inzeratyview">24 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225120695');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225120695');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18976320','17984129','Ji%C5%99%C3%AD+V.');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225120695');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225118735/iphone-18-pro-max-512gb-cerny-novy-nerozbaleny-hk.php"><img src="https://www.bazos.cz/img/1t/735/225118735.jpg" class="obrazek" alt="iPhone 18 Pro Max 512GB černý nový nerozbalený HK" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225118735/iphone-18-pro-max-512gb-cerny-novy-nerozbaleny-hk.php">iPhone 18 Pro Max 512GB černý nový nerozbalený HK</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Dobrý den, nabízím <b>iphone</b> 18 Pro Max v černé barvě s pamětí 512gb. Jedná se o nový nerozbalený telefon s účtenkou, úprava údajů je možná. K vyzvednutí v Hradci Králové nebo Pardubicích, přenechám rezervaci. V případě zájmu pište na uvedené telefonní  ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  44 999 Kč</span></b></div>
+<div class="inzeratylok">Pardubice<br>530 02</div>
+<div class="inzeratyview">17 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225118735');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225118735');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','17206770','16054519','L.');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225118735');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225116432/iphone-18-pro-max-512gb-cerveny-novy-zaruka-chocen.php"><img src="https://www.bazos.cz/img/1t/432/225116432.jpg" class="obrazek" alt="iPhone 18 Pro Max 512GB červený nový záruka Choceň" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225116432/iphone-18-pro-max-512gb-cerveny-novy-zaruka-chocen.php">iPhone 18 Pro Max 512GB červený nový záruka Choceň</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Dobrý den, mám k dispozici <b>iphone</b> 18 Pro Max v červené barvě s pamětí 512gb v Chocni, přenechám rezervaci. Nový nerozbalený telefon, záruka. V případě zájmu se mi ozvěte.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  44 999 Kč</span></b></div>
+<div class="inzeratylok">Ústí nad Orlicí<br>565 01</div>
+<div class="inzeratyview">16 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225116432');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225116432');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','17206770','16054519','L.');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225116432');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225112175/zanovni-apple-iphone-16-pro-128gb-natural-titan.php"><img src="https://www.bazos.cz/img/1t/175/225112175.jpg" class="obrazek" alt="Zánovní Apple iPhone 16 Pro 128GB Natural titan" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225112175/zanovni-apple-iphone-16-pro-128gb-natural-titan.php">Zánovní Apple iPhone 16 Pro 128GB Natural titan</a></h2><span class=velikost10> - [15.10. 2026]</span><br>
+<div class=popis>Prodam Apple <b>iphone</b> 16 Pro 128GB v barve Natural Titan,telefon je bez skrabancu a oděrek v zaruce 6.mesicu.Kapacita baterie 94%.Osobni vyzvednuti na našem kamennem krame v Pardubicich nebo v Praze.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  17 990 Kč</span></b></div>
+<div class="inzeratylok">Pardubice<br>530 02</div>
+<div class="inzeratyview">26 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225112175');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225112175');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','1558713','17872','Pavel');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225112175');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225102293/iphone-15-pro-512.php"><img src="https://www.bazos.cz/img/1t/293/225102293.jpg" class="obrazek" alt="iPhone 15 Pro 512" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225102293/iphone-15-pro-512.php">iPhone 15 Pro 512</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodám <b>iphone</b> 15 Pro 512Gb s novou baterií (kapacita 100%- originální). Telefon je ve stavu A+ tedy nenese žádné známky používání. US specifikace s dodělaným slotem na fyzickou SIM. Na ceně je možné se domluvit.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  15 400 Kč</span></b></div>
+<div class="inzeratylok">Olomouc<br>783 91</div>
+<div class="inzeratyview">39 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225102293');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225102293');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','8223088','6158988','Adam+Pan%C3%A1%C4%8Dek');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225102293');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225097899/iphone-11-a-64-gb.php"><img src="https://www.bazos.cz/img/1t/899/225097899.jpg" class="obrazek" alt="IPhone 11 a 64 gb" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225097899/iphone-11-a-64-gb.php">IPhone 11 a 64 gb</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Dobry den prodávám svůj <b>iphone</b> 11 a 64 novy telefon baterie je 100 a funguje dobře kdo ma zájem osobně převzít</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  4 000 Kč</span></b></div>
+<div class="inzeratylok">Olomouc<br>783 96</div>
+<div class="inzeratyview">62 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225097899');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225097899');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18943509','17948616','Samuela+Gunarova');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225097899');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225097040/iphone-15-128gb-cerny.php"><img src="https://www.bazos.cz/img/1t/040/225097040.jpg" class="obrazek" alt="iPhone 15 128GB černý" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225097040/iphone-15-128gb-cerny.php">iPhone 15 128GB černý</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodám <b>iphone</b> 15 128GB černý, kupován v Alze 5/2024. S krabičkou a dokladem o koupi, stav viz. foto.</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  7 990 Kč</span></b></div>
+<div class="inzeratylok">Hradec Králové<br>500 04</div>
+<div class="inzeratyview">53 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225097040');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225097040');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','144939','353469','Tom%C3%A1%C5%A1');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225097040');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225096001/iphone-12-bily-128gb-pekny-stav.php"><img src="https://www.bazos.cz/img/1t/001/225096001.jpg?t=1791997188" class="obrazek" alt="iPhone 12 Bílý 128GB Pěkný stav" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225096001/iphone-12-bily-128gb-pekny-stav.php">iPhone 12 Bílý 128GB Pěkný stav</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Dobrý den, prodám plně funkční <b>iphone</b> 12.
+Telefon nese pouze drobné známky používaní.
+iCloud odhlášen.
+Maximální kapacita baterie je 85%.
+Rám má několik velmi malých ťukanců a malou oděrku v pravém horním rohu.
+Byl v roce 2024 měněn fotoaparát a ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  4 999 Kč</span></b></div>
+<div class="inzeratylok">Svitavy<br>569 43</div>
+<div class="inzeratyview">32 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225096001');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225096001');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18940389','8730293','David');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225096001');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225087880/iphone-12-64-gb.php"><img src="https://www.bazos.cz/img/1t/880/225087880.jpg" class="obrazek" alt="IPhone 12 64 GB" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225087880/iphone-12-64-gb.php">IPhone 12 64 GB</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodám tento <b>iphone</b> , po celou dobu používání s ochranným sklem a krytem, k tomu 5x náhradní sklo + průhledný obal</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  4 500 Kč</span></b></div>
+<div class="inzeratylok">Svitavy<br>572 01</div>
+<div class="inzeratyview">22 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225087880');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225087880');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','7802069','5681400','Katka');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225087880');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225086618/iphone-14-pro.php"><img src="https://www.bazos.cz/img/1t/618/225086618.jpg?t=1791980318" class="obrazek" alt="Iphone 14 pro" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225086618/iphone-14-pro.php">Iphone 14 pro</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodam <b>iphone</b> 14 pro
+128gb
+Bila 
+Telefon je zachovalém stavu ma novou baterku od 6/26 přidám k němu 2 kryty a balíček se sklicky 
+Imei poskytnu zájemci do zprávy 
+Cena 12200kc pri rychlem jednani sleva</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  12 200 Kč</span></b></div>
+<div class="inzeratylok">Ústí nad Orlicí<br>561 53</div>
+<div class="inzeratyview">40 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225086618');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225086618');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','9456147','7894694','Daniel+Vacek');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225086618');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225085777/apple-iphone-16-pro-128-gb-titanium-top-stav-kompletni-ba.php"><img src="https://www.bazos.cz/img/1t/777/225085777.jpg" class="obrazek" alt="Apple iPhone 16 Pro 128 GB Titanium – TOP STAV, kompletní ba" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225085777/apple-iphone-16-pro-128-gb-titanium-top-stav-kompletni-ba.php">Apple iPhone 16 Pro 128 GB Titanium – TOP STAV, kompletní ba</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodám Apple <b>iphone</b> 16 Pro 128 GB v titanovém provedení.
+
+Telefon je ve stavu nového kusu, bez škrábanců a oděrek. Od prvního dne byl nošen v ochranném pouzdře, displej byl chráněn ochranným sklem a čočky fotoaparátu také.
+
+Parametry a stav:
+
+K ...</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  16 490 Kč</span></b></div>
+<div class="inzeratylok">Hradec Králové<br>500 02</div>
+<div class="inzeratyview">35 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225085777');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225085777');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','18794927','17785683','V%C3%A1clav');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225085777');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+
+<div class="inzeraty inzeratyflex">
+<div class="inzeratynadpis"><a href="/inzerat/225084584/iphone-16-pro-esim-128gb-93-12m-zaruka.php"><img src="https://www.bazos.cz/img/1t/584/225084584.jpg" class="obrazek" alt="iPhone 16 Pro (eSIM) - 128GB - 93% - 12M ZÁRUKA" width="170" height="128"></a>
+<h2 class=nadpis><a href="/inzerat/225084584/iphone-16-pro-esim-128gb-93-12m-zaruka.php">iPhone 16 Pro (eSIM) - 128GB - 93% - 12M ZÁRUKA</a></h2><span class=velikost10> - [14.10. 2026]</span><br>
+<div class=popis>Prodám Apple <b>iphone</b> 16 Pro (eSIM)
+
+Stav: A-
+Barva: Natural titanium
+Baterie: 93%
+Paměť: 128GB
+Záruka: 12 měsíců
+
+K telefonu přidám:
+- záruční list
+- krabičku
+- kabel
+
+K vyzvednutí na adrese: Hradecká 161, Jaroměř 
+Po - Pa: 9:00 / 17:00</div><br><br>
+</div>
+<div class="inzeratycena"><b><span translate="no">  18 290 Kč</span></b></div>
+<div class="inzeratylok">Náchod<br>551 01</div>
+<div class="inzeratyview">56 x</div>
+<div class="inzeratyakce">
+<span onclick="odeslatakci('spam','225084584');return false;" class="akce paction">Označit špatný inzerát</span> <span onclick="odeslatakci('category','225084584');return false;" class="akce paction">Chybnou kategorii</span> <span onclick="odeslatakci('rating','7083107','4309055','Michal+Hejzlar');return false;" class="akce paction">Ohodnotit uživatele</span> <span onclick="odeslatakci('edit','225084584');return false;" class="akce paction">Smazat/Upravit/Topovat</span>
+</div>
+</div>
+<div id="container_two"></div><script type="text/javascript" charset="utf-8">
+var pageOptions = {
+  'pubId': 'pub-3645948300403337',
+  'query' : "iphone",
+  "channel": "4719857758",  'linkTarget' : '_blank',
+  'personalizedAds' : false,
+  'adsafe': 'medium',
+  'ivt': false,
+'styleId' : '6171314811',  'hl': 'cs'
+};
+
+var adblock1 = {
+  'container': 'container_one',
+  'width': 'auto',
+  'maxTop' : 2
+};
+
+var adblock2 = {
+  'container': 'container_two',
+  'width': 'auto',
+  'number' : 2
+};
+
+_googCsa('ads', pageOptions, adblock2);</script>
+
+<br><div class="strankovani">Stránka: <b><span class=cisla>1</span></b> <a href="/20/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">2</a> <a href="/40/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">3</a> <a href="/60/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">4</a> <a href="/80/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">5</a> <a href="/100/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">6</a> <a href="/120/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">7</a> <a href="/140/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order=">8</a> <a href="/20/?hledat=iphone&hlokalita=56201&humkreis=60&cenaod=2000&cenado=45000&order="><b>Další</b></a></div><br><br><br>
+
+
+</div></div><br>
+
+&copy;2026 Bazoš -  <b>Inzerce, Bazar </b><br>
+<a href="https://www.bazos.cz/napoveda.php">Nápověda</a>, <a href="https://www.bazos.cz/dotazy.php">Dotazy</a>, <a href="https://www.bazos.cz/hodnoceni.php">Hodnocení</a>, <a href="https://www.bazos.cz/kontakt.php">Kontakt</a>, <a href="https://www.bazos.cz/reklama.php">Reklama</a>, <a href="https://www.bazos.cz/podminky.php">Podmínky</a>, <a href="https://www.bazos.cz/ochrana-udaju.php">Ochrana údajů</a>, <span onclick="odeslatakci('rss','&hlokalita=56201&humkreis=60&hledat=iphone&cenaod=2000&cenado=45000');return false;" class="paction">RSS</span>, <form name="formvkm" id="formvkm" method="post" style="display: inline;"><input type="hidden" name="vkm" value="m"><input type="submit" class="vkm" value="Mobilní verze"></form><br>
+
+Inzeráty Mobily celkem: <b>18397</b>, za 24 hodin: <b>981</b><br><br>
+<a href="https://www.bazos.cz/mapa-kategorie.php">Mapa kategorií</a>, <a href="https://mobil.bazos.cz/mapa-search.php">Nejvyhledávanější výrazy</a>
+<br>
+Země: <a href="https://mobil.bazos.cz">Česká republika</a>, <a href="https://mobil.bazos.sk">Slovensko</a>, <a href="https://telefon.bazos.pl">Polsko</a>, <a href="https://handy.bazos.at">Rakousko</a>
+<br>
+<br>
+</div>
+
+<script src="https://www.bazos.cz/cookie-consent.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+cookieconsent.run({"notice_banner_type":"simple","consent_type":"express","palette":"light","language":"cs","page_load_consent_levels":["strictly-necessary"],"notice_banner_reject_button_hide":false,"preferences_center_close_button_hide":false,"page_refresh_confirmation_buttons":false,"cookie_domain": "bazos.cz"});
+});
+</script>
+<a href="#" id="open_preferences_center"> </a>
+
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-NZW1QTHKBB"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-NZW1QTHKBB');
+</script>
+
+</body>
+</html>
