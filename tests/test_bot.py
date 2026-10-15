@@ -1,7 +1,9 @@
 """Bot: quiet hours, delivery, commands, config.yaml / prices.json edits, chat filter."""
 
 import asyncio
+import io
 import json
+import logging
 import shutil
 from datetime import datetime, timedelta
 
@@ -9,15 +11,17 @@ import pytest
 from aiogram.client.session.base import BaseSession
 from aiogram.methods import SendMessage
 from aiogram.types import Chat, Message, Update, User
+from rich.console import Console
 
 from scanner import config_edit
 from scanner.bot import (
-    ScannerApp, cmd_pct, code_version, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, deliver,
+    ScannerApp, cmd_logs, cmd_pct, code_version, health_problem, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, deliver,
     in_quiet_hours, make_bot,
 )
 from scanner.config import PROJECT_ROOT, AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE
+from scanner.logs import setup_logging
 from scanner.models import Listing
 from scanner.pricing import PriceList
 
@@ -60,7 +64,7 @@ def files(tmp_path):
     text = (PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8")
     config = tmp_path / "config.yaml"
     config.write_text(text.replace("pricing:\n", f"pricing:\n  prices_path: {prices}\n", 1), encoding="utf-8")
-    settings = Settings(_env_file=None, config_path=config, db_path=tmp_path / "t.db",
+    settings = Settings(_env_file=None, config_path=config, db_path=tmp_path / "t.db", log_dir=tmp_path / "logs",
                         telegram_bot_token="123456:TEST", telegram_chat_id=CHAT)
     return settings, config, prices
 
@@ -225,3 +229,56 @@ def test_bot_answers_only_its_chat(files):
         assert app.db.get_state("paused") == "1"
 
     run(scenario())
+
+
+# --- health check, logs ------------------------------------------------------------------------
+
+
+def test_health_problem_thresholds():
+    cfg = NotifyConfig()  # every 10 min, 30 min to alert; quiet hours every 30 min -> 60 min
+    start = datetime(2026, 10, 15, 8, 0)
+    ok = start + timedelta(hours=1)
+    assert health_problem(ok, start, ok + timedelta(minutes=30), False, cfg) is None
+    msg = health_problem(ok, start, ok + timedelta(minutes=31), False, cfg)
+    assert msg.startswith("⚠️ Нет успешного прогона Bazoš уже 31 мин") and "/logs" in msg
+    assert health_problem(ok, start, ok + timedelta(minutes=45), True, cfg) is None  # quiet hours: 60 min
+    # Right after a restart the last success may be old: the grace period counts from the start.
+    assert health_problem(start - timedelta(days=1), start, start + timedelta(minutes=20), False, cfg) is None
+    assert "ещё не было" in health_problem(None, start, start + timedelta(minutes=40), False, cfg)
+
+
+def test_health_check_alerts_once_and_recovers(files):
+    settings, _, _ = files
+    session = FakeSession()
+    app = ScannerApp(settings, bot=make_bot("123456:TEST", session=session))
+    app.started_at = datetime.now() - timedelta(hours=2)
+    run(app.health_check())
+    run(app.health_check())
+    assert [c.text.split(" ")[0] for c in session.calls] == ["⚠️"]  # once, not every 5 minutes
+    run_id = app.db.start_run()
+    app.db.finish_run(run_id, listings=300)
+    run(app.health_check())
+    assert session.calls[-1].text == "✅ Сканирование снова работает" and len(session.calls) == 2
+    app.db.set_state("paused", "1")
+    app.started_at = datetime.now() - timedelta(days=1)
+    app.db.conn.execute("DELETE FROM runs")
+    run(app.health_check())
+    assert len(session.calls) == 2  # paused: no alert
+
+
+def test_logs_command_and_files(files, tmp_path):
+    settings, _, _ = files
+    assert cmd_logs(settings) == "В логе ошибок пусто 👍"
+    setup_logging("INFO", settings.log_dir, Console(file=io.StringIO()))
+    try:
+        logging.getLogger("scanner.test").info("just info")
+        logging.getLogger("scanner.test").error("bazos <search> failed")
+    finally:
+        for h in logging.getLogger().handlers:
+            h.flush()
+    assert "just info" in (settings.log_dir / "scanner.log").read_text(encoding="utf-8")
+    errors = (settings.log_dir / "errors.log").read_text(encoding="utf-8")
+    assert "bazos <search> failed" in errors and "just info" not in errors
+    out = cmd_logs(settings)
+    assert out.startswith("<b>Последние ошибки") and "bazos &lt;search&gt; failed" in out
+    logging.basicConfig(force=True)  # detach the file handlers again

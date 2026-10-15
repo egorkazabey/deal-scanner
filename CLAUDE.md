@@ -58,6 +58,9 @@ Pipeline (built step by step, see PROMPTS.md):
   plain functions). Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
 - `scanner/config_edit.py`: line-level edits of config.yaml (radius, tier pct, searches; validated
   before writing) and market_price edits in prices.json (logged in `price_changes`)
+- `scanner/logs.py`: console + rotating files `data/logs/scanner.log` (INFO) and `errors.log` (WARNING+);
+  the bot shows the end of errors.log with /logs. The bot also sends "🤖 Бот запущен" with the version on start
+  and a health alert when no scan succeeded for `notify.health_after_min` (twice the interval in quiet hours)
 - `scanner/__main__.py`: CLI
 - `tests/`: pytest; `tests/fixtures/` holds real Bazoš HTML
 
@@ -76,6 +79,7 @@ python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. 
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 pytest
 ```
+README.md (Russian) is the user-facing guide: setup, hosting, bot commands, troubleshooting.
 `knowledge/components.json` holds used component prices for PC valuation (not prices.json).
 `data/` is runtime only (the DB; on the host a persistent volume is mounted there and hides its contents), so
 reference files live in `knowledge/`. The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the

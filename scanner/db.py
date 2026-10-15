@@ -464,6 +464,13 @@ class Database:
                 (ts, *counts.values(), run_id),
             )
 
+    def last_success(self) -> datetime | None:
+        """End of the last scan that finished and fetched listings."""
+        row = self.conn.execute(
+            "SELECT MAX(finished_at) FROM runs WHERE finished_at IS NOT NULL AND listings > 0"
+        ).fetchone()
+        return datetime.fromisoformat(row[0]) if row and row[0] else None
+
     def last_runs(self, limit: int = 1) -> list[sqlite3.Row]:
         return self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 

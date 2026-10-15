@@ -27,6 +27,7 @@ from scanner import config_edit
 from scanner.config import PROJECT_ROOT, AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE, GeminiReviewer, Verdict
+from scanner.logs import tail
 from scanner.notify import NO_AI_EMOJI, VERDICT_EMOJI, age_words, kc, split_messages
 from scanner.pipeline import cached_pc_results, run_scan
 from scanner.pricing import PriceList, evaluate_many, max_price_rule_lines, rank
@@ -37,6 +38,7 @@ log = logging.getLogger(__name__)
 HELP = """\
 <b>Сканер Bazoš</b>
 /status — последний прогон, ошибки, лимиты Gemini
+/logs — последние предупреждения и ошибки из лога
 /pause, /resume — остановить / продолжить сканирование
 /top — 10 лучших активных кандидатов за 24 ч + «залежавшиеся»
 /skipped — что Gemini отбраковал за 24 ч
@@ -58,6 +60,21 @@ def in_quiet_hours(now: datetime, cfg: NotifyConfig) -> bool:
     """`now` in Prague time; the window may cross midnight."""
     start, end, t = _hm(cfg.quiet_start), _hm(cfg.quiet_end), now.astimezone(PRAGUE).time()
     return start <= t < end if start <= end else t >= start or t < end
+
+
+def health_problem(
+    last_success: datetime | None, started: datetime, now: datetime, quiet: bool, cfg: NotifyConfig,
+) -> str | None:
+    """Text of the alert when no scan succeeded for too long (naive local times, like the DB)."""
+    interval = cfg.quiet_interval_min if quiet else cfg.interval_min
+    limit = timedelta(minutes=max(cfg.health_after_min, 2 * interval))
+    since = max(t for t in (last_success, started) if t)  # a fresh start gets a full grace period
+    if now - since <= limit:
+        return None
+    minutes = int((now - since).total_seconds() // 60)
+    last = _fmt_ts(last_success.isoformat()) if last_success else "ещё не было"
+    return (f"⚠️ Нет успешного прогона Bazoš уже {minutes} мин (последний удачный: {last}).\n"
+            "Последние ошибки: /logs, состояние: /status")
 
 
 # --- delivery ----------------------------------------------------------------------------------
@@ -189,6 +206,14 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
         lines.append(f"Gemini {model}: {u['requests']} запросов, осталось {u['left']} из {settings.gemini_rpd}, "
                      f"ошибок {u['errors']}, токенов {kc(u['total_tokens'])}")
     return "\n".join(lines)
+
+
+def cmd_logs(settings: Settings, lines: int = 30) -> str:
+    rows = tail(settings.log_dir / "errors.log", lines)
+    if not rows:
+        return "В логе ошибок пусто 👍"
+    text = "\n".join(rows)[-3500:]  # Telegram: 4 096 characters per message
+    return f"<b>Последние ошибки и предупреждения</b>\n<pre>{escape(text)}</pre>"
 
 
 def _review_emoji(db: Database, source: str, listing_id: str, price: int | None) -> str:
@@ -341,6 +366,7 @@ class ScannerApp:
         self._scan_lock = asyncio.Lock()
         self._last_scan: datetime | None = None
         self._scan_task: asyncio.Task | None = None
+        self.started_at = datetime.now()  # naive local, like the DB timestamps
         self.dp.include_router(self._router())
         self.dp.startup.register(self._on_startup)
         self.dp.shutdown.register(self._on_shutdown)
@@ -385,8 +411,36 @@ class ScannerApp:
             self.tick, IntervalTrigger(minutes=cfg.notify.interval_min, jitter=cfg.notify.jitter_s),
             id="bazos", max_instances=1, coalesce=True, next_run_time=datetime.now(PRAGUE) + timedelta(seconds=5),
         )
+        self.scheduler.add_job(self.health_check, IntervalTrigger(minutes=5), id="health", max_instances=1,
+                               coalesce=True)
         self.scheduler.start()
         log.info("scheduler started: Bazoš every %d min", cfg.notify.interval_min)
+        if cfg.notify.startup_message:
+            prices = PriceList.load(cfg.pricing.prices_path)
+            await self._notify(f"🤖 Бот запущен. Версия {code_version()}, прайс {len(prices.items)} позиций. "
+                               "Первый прогон через несколько секунд.")
+
+    async def _notify(self, text: str) -> None:
+        try:
+            await _send(self.bot, self.chat_id, text)
+        except TelegramAPIError as exc:
+            log.error("Telegram message failed: %s", exc)
+
+    async def health_check(self) -> None:
+        """Telegram once when scans stop succeeding, and once when they work again."""
+        if self.db.get_state("paused") == "1":
+            return
+        cfg = self.cfg()
+        quiet = in_quiet_hours(datetime.now(PRAGUE), cfg.notify)
+        problem = health_problem(self.db.last_success(), self.started_at, datetime.now(), quiet, cfg.notify)
+        alerted = self.db.get_state("health_alerted") == "1"
+        if problem and not alerted:
+            log.error("health: %s", problem.split("\n")[0])
+            await self._notify(problem)
+            self.db.set_state("health_alerted", "1")
+        elif not problem and alerted:
+            await self._notify("✅ Сканирование снова работает")
+            self.db.set_state("health_alerted", "0")
 
     async def _on_shutdown(self) -> None:
         self.scheduler.shutdown(wait=False)
@@ -414,6 +468,10 @@ class ScannerApp:
         @r.message(Command("status"))
         async def _status(m: Message) -> None:
             await m.answer(cmd_status(self.settings, self.cfg(), self.db, self._next_run()))
+
+        @r.message(Command("logs"))
+        async def _logs(m: Message) -> None:
+            await m.answer(cmd_logs(self.settings))
 
         @r.message(Command("pause"))
         async def _pause(m: Message) -> None:
