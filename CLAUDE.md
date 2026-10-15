@@ -29,6 +29,12 @@ Pipeline (built step by step, see PROMPTS.md):
   model + attrs, `PriceList.match()` (price list items are parsed by the same `identify()`; unreadable
   model names go to `_ITEM_ALIASES`), `evaluate()` / `evaluate_many()` (metrics, stop words, accessory,
   too_cheap, scam_suspect, shop, score 0–100), `rank()`. Thresholds and distance bonus: `pricing:` in config.yaml
+- `scanner/gemini.py`: Gemini second opinion (google-genai). `Verdict` = response schema,
+  `GeminiReviewer.review()` (cache in `gemini_reviews` by source+id+price, per-model `RateLimiter` for
+  RPM/TPM, RPD from `gemini_usage`, 429 backoff, daily quota → fallback model → "без ИИ"),
+  `review_candidates()` (fetch description, re-check rules, then Gemini). KNOWLEDGE.md is the system
+  instruction. Models and limits: `GEMINI_*` in .env (explicit ids only, no `*-latest`); quota day is
+  counted in `GEMINI_QUOTA_TZ` (Pacific Time, resets ~09:00 Prague). Other options: `gemini:` in config.yaml
 - `scanner/__main__.py`: CLI
 - `tests/`: pytest; `tests/fixtures/` holds real Bazoš HTML
 
@@ -37,6 +43,9 @@ Pipeline (built step by step, see PROMPTS.md):
 python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 python -m scanner run-once --dry        # scan all Bazoš searches, print ranked candidates
 python -m scanner run-once --dry --all  # also print matched listings that are not candidates (and why)
+python -m scanner run-once --dry --no-ai # same, without Gemini (--ai-limit N: only top N candidates)
+python -m scanner review --limit 5 --json  # Gemini for top DB candidates, print the JSON verdicts
+python -m scanner reviews --skipped     # what Gemini rejected in the last 24 h (+ today's Gemini usage)
 python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. after editing prices.json)
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 pytest

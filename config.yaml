@@ -36,3 +36,10 @@ pricing:
   near_cities: [Pardubice, Hradec Králové, Svitavy, Chrudim, Litomyšl, Rychnov nad Kněžnou, Holice,
                 Polička, Králíky, Náchod, Šumperk, Přelouč, Trutnov, Moravská Třebová, Kostelec nad Orlicí,
                 Dobruška, Jablonné nad Orlicí, Brandýs nad Orlicí]
+
+gemini:
+  enabled: true               # false = notifications with rule-based evaluation only ("без ИИ")
+  timeout: 60                 # seconds per request
+  retries: 4                  # on 429 (per minute) / 5xx / network errors, exponential backoff
+  backoff_base: 5             # seconds, doubled per attempt (or the API's retryDelay)
+  # Model ids, RPM/RPD/TPM and quota time zone are in .env (GEMINI_*)

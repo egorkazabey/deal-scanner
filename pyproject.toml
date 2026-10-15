@@ -10,6 +10,8 @@ dependencies = [
     "pydantic-settings>=2.3",
     "pyyaml>=6.0",
     "rich>=13.7",
+    "google-genai>=1.50",
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

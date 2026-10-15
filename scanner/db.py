@@ -40,6 +40,33 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_price_history_listing ON price_history (source, listing_id);
 CREATE INDEX IF NOT EXISTS idx_listings_last_seen ON listings (last_seen);
+
+-- Gemini second opinion, cached once per listing and price (a price change gets a new review).
+CREATE TABLE IF NOT EXISTS gemini_reviews (
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    price       INTEGER NOT NULL,
+    model       TEXT NOT NULL,
+    response    TEXT NOT NULL,  -- verdict JSON as returned by Gemini
+    verdict     TEXT NOT NULL,  -- buy / negotiate / skip
+    scam_risk   TEXT NOT NULL,  -- low / medium / high
+    notify      INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (source, listing_id, price)
+);
+
+-- Requests and tokens per quota day (in GEMINI_QUOTA_TZ) and model.
+CREATE TABLE IF NOT EXISTS gemini_usage (
+    day            TEXT NOT NULL,
+    model          TEXT NOT NULL,
+    requests       INTEGER NOT NULL DEFAULT 0,
+    errors         INTEGER NOT NULL DEFAULT 0,
+    prompt_tokens  INTEGER NOT NULL DEFAULT 0,
+    output_tokens  INTEGER NOT NULL DEFAULT 0,
+    total_tokens   INTEGER NOT NULL DEFAULT 0,
+    exhausted      INTEGER NOT NULL DEFAULT 0,  -- the API answered "daily quota exceeded"
+    PRIMARY KEY (day, model)
+);
 """
 
 
@@ -144,6 +171,73 @@ class Database:
             "SELECT price, seen_at FROM price_history WHERE source = ? AND listing_id = ? ORDER BY id",
             (source, listing_id),
         ).fetchall()
+
+    def set_description(self, source: str, listing_id: str, description: str | None) -> None:
+        with self.conn:
+            self.conn.execute(
+                "UPDATE listings SET description = ? WHERE source = ? AND id = ?",
+                (description, source, listing_id),
+            )
+
+    # --- Gemini ---
+
+    def get_review(self, source: str, listing_id: str, price: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM gemini_reviews WHERE source = ? AND listing_id = ? AND price = ?",
+            (source, listing_id, price),
+        ).fetchone()
+
+    def save_review(
+        self, source: str, listing_id: str, price: int, model: str, response: str,
+        verdict: str, scam_risk: str, notify: bool, now: datetime | None = None,
+    ) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO gemini_reviews
+                       (source, listing_id, price, model, response, verdict, scam_risk, notify, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source, listing_id, price, model, response, verdict, scam_risk, int(notify), ts),
+            )
+
+    def reviews(self, since: datetime, only_hidden: bool = False) -> list[sqlite3.Row]:
+        """Stored reviews joined with their listing, newest first."""
+        sql = """SELECT r.*, l.title, l.url, l.location, l.price AS current_price
+                 FROM gemini_reviews r JOIN listings l ON l.source = r.source AND l.id = r.listing_id
+                 WHERE r.created_at >= ?"""
+        if only_hidden:
+            sql += " AND r.notify = 0"
+        return self.conn.execute(
+            sql + " ORDER BY r.created_at DESC", (since.isoformat(timespec="seconds"),)
+        ).fetchall()
+
+    def add_gemini_usage(
+        self, day: str, model: str, *, requests: int = 0, errors: int = 0,
+        prompt_tokens: int = 0, output_tokens: int = 0, total_tokens: int = 0,
+    ) -> None:
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO gemini_usage (day, model, requests, errors, prompt_tokens, output_tokens,
+                       total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT (day, model) DO UPDATE SET
+                       requests = requests + excluded.requests, errors = errors + excluded.errors,
+                       prompt_tokens = prompt_tokens + excluded.prompt_tokens,
+                       output_tokens = output_tokens + excluded.output_tokens,
+                       total_tokens = total_tokens + excluded.total_tokens""",
+                (day, model, requests, errors, prompt_tokens, output_tokens, total_tokens),
+            )
+
+    def mark_gemini_exhausted(self, day: str, model: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO gemini_usage (day, model, exhausted) VALUES (?, ?, 1)
+                   ON CONFLICT (day, model) DO UPDATE SET exhausted = 1""",
+                (day, model),
+            )
+
+    def gemini_usage(self, day: str) -> dict[str, sqlite3.Row]:
+        rows = self.conn.execute("SELECT * FROM gemini_usage WHERE day = ?", (day,)).fetchall()
+        return {r["model"]: r for r in rows}
 
 
 def _row_to_listing(r: sqlite3.Row) -> Listing:
