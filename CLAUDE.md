@@ -58,10 +58,19 @@ Pipeline (built step by step, see PROMPTS.md):
   Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
 - `scanner/menu.py`: what the bot shows. Bottom reply keyboard (`MAIN_KEYBOARD`), "/" command list
   (`BOT_COMMANDS`), inline screens edited in place: `render("<screen>")` for callbacks `m:<screen>:<args>`
-  (home, status, top, card, skipped, logs, settings, tiers, radius, searches, rmsearch) and `act()` for
-  `a:<action>:<args>` (pause/resume, tier ±1, radius, rmsearch). Plain functions returning (HTML, keyboard)
+  (home, status, top, card, skipped, logs, settings, tiers, radius, searches, rmsearch, prices, preport,
+  pselect) and `act()` for `a:<action>:<args>` (pause/resume, tier ±1, radius, rmsearch, ptoggle, papply). Plain functions returning (HTML, keyboard)
 - `scanner/config_edit.py`: line-level edits of config.yaml (radius, tier pct, searches; validated
   before writing) and market_price edits in prices.json (logged in `price_changes`)
+- `scanner/overrides.py`: every Telegram edit goes through here: it edits the file and records it in
+  `overrides` (with the repo value it replaced); `replay()` on bot start re-applies them after a redeploy,
+  unless the repo changed that value since (the repo wins, the record is dropped)
+- `scanner/learn.py`: self-learning price list. `record()` stores observations (high-confidence matches,
+  last asking price per listing) and `unknown_models`; `check_sold()` checks detail pages of listings that
+  left the results (404/410 = probable sale); `build_report()` proposes market prices (median of sales,
+  else median asking × 95 %, capped ±8 %, rounded towards the current price; estimate items first);
+  proposals are applied only by the owner's buttons (`apply()`, through overrides). Weekly job: `learn:`
+  in config.yaml (Sunday 19:00), on demand: /prices, CLI `price-report`
 - `scanner/logs.py`: console + rotating files `data/logs/scanner.log` (INFO) and `errors.log` (WARNING+);
   the bot shows the end of errors.log with /logs. The bot also sends "🤖 Бот запущен" with the version on start
   and a health alert when no scan succeeded for `notify.health_after_min` (twice the interval in quiet hours)
@@ -81,6 +90,7 @@ python -m scanner review --ids 123 456 --refresh  # these listings first, ignori
 python -m scanner reviews --skipped     # what Gemini rejected in 24 h, pricing mismatches, Gemini usage
 python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. after editing prices.json)
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
+python -m scanner price-report          # price proposals from the collected observations (= /prices)
 pytest
 ```
 README.md (Russian) is the user-facing guide: setup, hosting, bot commands, troubleshooting.

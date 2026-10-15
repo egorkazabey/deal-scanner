@@ -21,14 +21,17 @@ from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramRet
 from aiogram.filters import Command, CommandObject
 from aiogram.types import BotCommandScopeChat, CallbackQuery, InlineKeyboardMarkup, MenuButtonCommands, Message
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from scanner import overrides
 from scanner.config import AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE
 from scanner.menu import (
     BOT_COMMANDS, BTN_LOGS, BTN_PAUSE, BTN_SETTINGS, BTN_SKIPPED, BTN_STATUS, BTN_TOP, HELP, MAIN_KEYBOARD, Screen,
     _fmt_ts, act, alert_keyboard, apply_price, cmd_pct, cmd_price, cmd_radius, cmd_search, code_version, render,
+    screen_prices,
 )
 from scanner.notify import kc, split_messages
 from scanner.pipeline import run_scan
@@ -189,6 +192,7 @@ class ScannerApp:
         await deliver(self.bot, self.db, self.chat_id, quiet)
 
     async def _on_startup(self) -> None:
+        restored = overrides.replay(self.settings, self.db)  # Telegram edits survive a redeploy
         cfg = self.cfg()
         self.scheduler.add_job(
             self.tick, IntervalTrigger(minutes=cfg.notify.interval_min, jitter=cfg.notify.jitter_s),
@@ -196,6 +200,9 @@ class ScannerApp:
         )
         self.scheduler.add_job(self.health_check, IntervalTrigger(minutes=5), id="health", max_instances=1,
                                coalesce=True)
+        hour, minute = map(int, cfg.learn.report_time.split(":"))
+        self.scheduler.add_job(self.weekly_report, CronTrigger(day_of_week=cfg.learn.report_day, hour=hour,
+                                                               minute=minute, timezone=PRAGUE), id="prices")
         self.scheduler.start()
         log.info("scheduler started: Bazoš every %d min", cfg.notify.interval_min)
         try:
@@ -205,14 +212,23 @@ class ScannerApp:
             log.warning("Telegram command menu not set: %s", exc)
         if cfg.notify.startup_message:
             prices = PriceList.load(cfg.pricing.prices_path)
+            extra = f"\n♻️ Восстановлены настройки из меню: {escape('; '.join(restored))}" if restored else ""
             await self._notify(f"🤖 Бот запущен. Версия {code_version()}, прайс {len(prices.items)} позиций. "
-                               "Первый прогон через несколько секунд.", MAIN_KEYBOARD)
+                               f"Первый прогон через несколько секунд.{extra}", MAIN_KEYBOARD)
 
     async def _notify(self, text: str, markup=None) -> None:
         try:
             await _send(self.bot, self.chat_id, text, markup)
         except TelegramAPIError as exc:
             log.error("Telegram message failed: %s", exc)
+
+    async def weekly_report(self) -> None:
+        """Sunday 19:00: price proposals from the observations, applied only by the owner's button."""
+        text, markup = screen_prices(self.settings, self.db)
+        try:
+            await _send(self.bot, self.chat_id, text, markup)
+        except TelegramAPIError as exc:
+            log.error("price report failed: %s", exc)
 
     async def health_check(self) -> None:
         """Telegram once when scans stop succeeding, and once when they work again."""
@@ -284,6 +300,10 @@ class ScannerApp:
         async def _settings(m: Message) -> None:
             await show(m, screen("settings"))
 
+        @r.message(Command("prices"))
+        async def _prices(m: Message) -> None:
+            await show(m, screen("prices"))
+
         @r.message(Command("logs"))
         @r.message(F.text == BTN_LOGS)
         async def _logs(m: Message) -> None:
@@ -306,15 +326,15 @@ class ScannerApp:
 
         @r.message(Command("pct"))
         async def _pct(m: Message, command: CommandObject) -> None:
-            await m.answer(cmd_pct(self.settings, command.args))
+            await m.answer(cmd_pct(self.settings, self.db, command.args))
 
         @r.message(Command("radius"))
         async def _radius(m: Message, command: CommandObject) -> None:
-            await m.answer(cmd_radius(self.settings, command.args))
+            await m.answer(cmd_radius(self.settings, self.db, command.args))
 
         @r.message(Command("search"))
         async def _search(m: Message, command: CommandObject) -> None:
-            await m.answer(cmd_search(self.settings, command.args))
+            await m.answer(cmd_search(self.settings, self.db, command.args))
 
         @r.message(Command("price"))
         async def _price(m: Message, command: CommandObject) -> None:

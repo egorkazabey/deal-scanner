@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
+from scanner import learn
 from scanner.config import AppConfig, Settings
 from scanner.db import Database, Status, UpsertKind
 from scanner.gemini import PRAGUE, GeminiReviewer, NoAI, Review, Verdict, review_candidates
@@ -140,6 +141,7 @@ async def _scan(
 
     evaluations = evaluate_many(result.listings, prices, cfg.pricing, today)
     report.evaluations = evaluations
+    learn.record(db, evaluations, started)  # observations for the weekly price report
     report.candidates = sum(e.is_candidate for e in evaluations)
     by_key = {(e.listing.source, e.listing.id): e for e in evaluations}
 
@@ -181,6 +183,7 @@ async def _scan(
 
     if not dry:
         await _gone_alerts(db, cfg, client, started, quiet, report)
+        await learn.check_sold(db, client, cfg.learn, started)
 
 
 def value_pc_listing(

@@ -142,36 +142,36 @@ def test_status_and_top(files):
 def test_pct_changes_one_tier_and_keeps_the_file(files):
     settings, config, _ = files
     before = config.read_text(encoding="utf-8").split("\n")
-    out = cmd_pct(settings, "2 80")
+    out = cmd_pct(settings, Database(':memory:'), "2 80")
     assert "Ступень 2 → 80 %" in out and "market × 0.80" in out
     after = config.read_text(encoding="utf-8").split("\n")
     changed = [(a, b) for a, b in zip(before, after) if a != b]
     assert changed == [("    - {up_to: 12000, pct: 78, min_margin: 1200}   # 5 000 – 12 000",
                         "    - {up_to: 12000, pct: 80, min_margin: 1200}   # 5 000 – 12 000")]
-    assert "ступень: от 1 до 3" in cmd_pct(settings, "4 80")
-    assert "процент" in cmd_pct(settings, "1 99")
+    assert "ступень: от 1 до 3" in cmd_pct(settings, Database(':memory:'), "4 80")
+    assert "процент" in cmd_pct(settings, Database(':memory:'), "1 99")
 
 
 def test_radius(files):
     settings, _, _ = files
-    assert cmd_radius(settings, "45") == "Радиус Bazoš: 45 км (со следующего прогона)"
+    assert cmd_radius(settings, Database(':memory:'), "45") == "Радиус Bazoš: 45 км (со следующего прогона)"
     assert load_config(settings.config_path).bazos.radius_km == 45
-    assert "от 1 до 500" in cmd_radius(settings, "900")
+    assert "от 1 до 500" in cmd_radius(settings, Database(':memory:'), "900")
 
 
 def test_search_add_list_remove(files):
     settings, _, _ = files
     n = len(load_config(settings.config_path).bazos.searches)
-    assert "Добавлен" in cmd_search(settings, "add mobil galaxy s24 3000 20000")
+    assert "Добавлен" in cmd_search(settings, Database(':memory:'), "add mobil galaxy s24 3000 20000")
     searches = load_config(settings.config_path).bazos.searches
     added = next(s for s in searches if s.name == "galaxy s24")
     assert (added.section, added.query, added.price_min, added.price_max) == ("mobil", "galaxy s24", 3000, 20000)
     assert [s.section for s in searches].index("pc") > searches.index(added)  # grouped with "mobil"
-    assert "уже есть" in cmd_search(settings, "add mobil galaxy s24")
-    assert "galaxy s24" in cmd_search(settings, "list")
-    assert "Удалён" in cmd_search(settings, "remove galaxy s24")
+    assert "уже есть" in cmd_search(settings, Database(':memory:'), "add mobil galaxy s24")
+    assert "galaxy s24" in cmd_search(settings, Database(':memory:'), "list")
+    assert "Удалён" in cmd_search(settings, Database(':memory:'), "remove galaxy s24")
     assert len(load_config(settings.config_path).bazos.searches) == n
-    assert "нет" in cmd_search(settings, "remove nothing")
+    assert "нет" in cmd_search(settings, Database(':memory:'), "remove nothing")
 
 
 def test_price_single_and_ambiguous(files):
@@ -293,7 +293,7 @@ def _all_callbacks(markup):
 
 
 @pytest.mark.parametrize("name", ["home", "status", "top", "skipped", "logs", "settings", "tiers", "radius",
-                                  "searches", "unknown"])
+                                  "searches", "prices", "unknown"])
 def test_every_screen_renders(files, name):
     settings, _, _ = files
     db = Database(":memory:")

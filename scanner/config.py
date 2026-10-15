@@ -162,11 +162,37 @@ class NotifyConfig(BaseModel):
         return value
 
 
+class LearnConfig(BaseModel):
+    """Self-learning price list (scanner.learn): observations, probable sales, the weekly report."""
+
+    window_days: int = 30  # observations seen in the last 30 days count
+    min_observations: int = 5  # an item needs this many listings to get a proposal
+    min_sold: int = 3  # with this many probable sales their median is the target ...
+    asking_to_sold_pct: int = 95  # ... otherwise median asking price x 95 %
+    max_step_pct: int = 8  # at most +-8 % per report
+    min_change_pct: int = 2  # smaller differences: no proposal
+    sold_checks_per_run: int = 3  # detail pages of listings that left the search results, per run
+    unseen_days: int = 1  # not in the results for a day -> check whether it was deleted (410)
+    recheck_days: int = 3  # still online: look again after 3 days
+    give_up_days: int = 30  # stop checking listings first seen longer ago
+    new_model_min_listings: int = 3  # models missing from the price list, suggested from this many listings
+    report_day: str = "sun"  # weekly report, Prague time
+    report_time: str = "19:00"
+
+    @field_validator("report_time")
+    @classmethod
+    def _hh_mm(cls, value: str) -> str:
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value):
+            raise ValueError(f"{value!r}: use HH:MM")
+        return value
+
+
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
     pricing: PricingConfig = PricingConfig()
     gemini: GeminiConfig = GeminiConfig()
     notify: NotifyConfig = NotifyConfig()
+    learn: LearnConfig = LearnConfig()
 
 
 def load_config(path: Path) -> AppConfig:

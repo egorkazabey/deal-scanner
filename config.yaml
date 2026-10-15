@@ -74,3 +74,20 @@ notify:
   gone_check_every_min: 60    # each one at most once per hour
   health_after_min: 30        # no successful scan for 30 min (60 in quiet hours) -> message in Telegram
   startup_message: true       # "🤖 Бот запущен" with the code version after every (re)start
+
+learn:
+  # Self-learning price list: every confidently matched listing is an observation (asking price);
+  # a listing whose detail page later answers 410 (deleted) counts as a probable sale at its last price.
+  window_days: 30             # observations of the last 30 days count
+  min_observations: 5         # an item needs 5+ listings to get a proposal
+  min_sold: 3                 # 3+ probable sales: their median is the target ...
+  asking_to_sold_pct: 95      # ... otherwise median asking price x 95 %
+  max_step_pct: 8             # at most +-8 % per weekly report
+  min_change_pct: 2           # smaller differences: no proposal
+  sold_checks_per_run: 3      # detail pages checked per run (listings gone from the results)
+  unseen_days: 1              # missing from the results for a day -> check if it was deleted
+  recheck_days: 3             # still online: look again after 3 days
+  give_up_days: 30            # stop checking listings first seen longer ago
+  new_model_min_listings: 3   # models missing from the price list, suggested from 3+ listings
+  report_day: sun             # weekly report: Sunday 19:00 Prague time
+  report_time: "19:00"
