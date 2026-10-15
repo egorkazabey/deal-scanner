@@ -1003,6 +1003,14 @@
   },
   {
    "category": "apple_watch",
+   "model": "Apple Watch Series 10",
+   "variant": "42 мм",
+   "market_price": 4800,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "category": "apple_watch",
    "model": "Apple Watch Series 11",
    "variant": "42 / 46 мм",
    "bazos_range": [

@@ -109,7 +109,7 @@ TYPICAL_TITLES = [
     ("Apple watch SE 40mm", "Apple Watch SE (1 gen) 40 / 44 мм", "low"),
     ("Apple Watch Series 8 45mm nerez ocel", "Apple Watch Series 8/9 нерж. сталь", "high"),
     ("Apple Watch Ultra 2 49mm titan", "Apple Watch Ultra 2 49 мм", "high"),
-    ("Apple Watch Series 10 42mm", None, None),  # only 46 mm priced; 42 mm is cheaper
+    ("Apple Watch Series 10 42mm", "Apple Watch Series 10 42 мм", "high"),
     ("AirPods Pro 2 USB-C", "AirPods Pro 2 Lightning / USB-C", "high"),
     ("Airpods pro", "AirPods Pro 1 2019–2021", "low"),
     ("AirPods 4 s ANC", "AirPods 4 с ANC", "high"),
@@ -382,3 +382,21 @@ def test_bundle_extra_controllers_count_half(prices):
     assert any("комплект" in n for n in double.match.notes)
     with_one = evaluate(make("PS5 Slim 1TB s ovladačem", 8000), prices, CFG, TODAY)
     assert with_one.market_price == single.market_price
+
+
+@pytest.mark.parametrize(
+    "title, description, excluded",
+    [
+        ("iPhone 15 128GB", "Prodám nebo možná výměna.", False),
+        ("Apple Watch Ultra 3 (2025) 49m", "Důvodem prodeje je výměna za nový model.", False),
+        ("iPhone 15 128GB prodám nebo vyměním", None, False),
+        ("iPhone 15 128GB výměna za Android", None, True),
+        ("iPhone 15 128GB vyměním", None, True),
+    ],
+)
+def test_exchange_excludes_only_swap_titles(prices, title, description, excluded):
+    ev = evaluate(make(title, 7500, description=description), prices, CFG, TODAY)
+    assert ("výměna" in ev.stop) is excluded
+    assert ev.is_candidate is (not excluded)
+    if not excluded:
+        assert "возможен обмен" in ev.flags

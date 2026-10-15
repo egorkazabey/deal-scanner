@@ -659,6 +659,15 @@ _CONSOLE_ACC_RE = re.compile(r"\bdock\b|\b(?:hra|hry|hru|her)\b|\bkamer\w*|\bcam
 _PRICED_CONTROLLERS = {"dualsense", "xbox controller", "switch controller"}
 
 
+_EXCHANGE_RE = dict(_STOP_RULES)["výměna"]
+_SALE_RE = re.compile(r"\bprod\w*|\bnebo\b")
+
+
+def exchange_only(title: str) -> bool:
+    """A swap offer in the (normalized) title with no sale ("výměna za Android", "vyměním")."""
+    return bool(_EXCHANGE_RE.search(title)) and not _SALE_RE.search(title)
+
+
 def is_accessory(text: str, ident: Identity | None) -> bool:
     if ident and ident.model == "airpods part":  # a charging case / single earbud is a part we price
         return bool(re.search(r"\b(?:obal\w*|kryt\w*|pouzdr\w*) na\b", text))
@@ -724,6 +733,9 @@ def evaluate(
     ident = identify(title)
 
     ev.stop = stop_reasons(full)
+    if "výměna" in ev.stop and not exchange_only(title):
+        ev.stop.remove("výměna")  # sale with a possible swap ("prodám nebo výměna", "důvodem je výměna")
+        ev.flags.append("возможен обмен")
     if is_accessory(title, ident):
         ev.flags.append("accessory")
     if _SHOP_RE.search(full):

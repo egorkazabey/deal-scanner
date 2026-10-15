@@ -156,7 +156,7 @@ def _print_reviews(reviews: list[Review], reviewer: GeminiReviewer, as_json: boo
             f"{v.model} {v.variant}".strip(), _fmt_price(l.price),
             f"[{color}]{v.verdict}[/]" + ("" if rv.notify else " [dim](не шлём)[/]"),
             _fmt_price(v.offer_price), _fmt_price(v.max_price), _fmt_price(v.adjusted_market_price),
-            "; ".join(flags), l.title,
+            "; ".join(dict.fromkeys(flags)), l.title,
         )
     console.print(table)
     if as_json:
