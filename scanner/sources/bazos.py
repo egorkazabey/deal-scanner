@@ -1,6 +1,6 @@
 """Bazoš.cz source: search result pages and listing details.
 
-Page structure is documented in data/KNOWLEDGE.md ("Техника парсинга → Bazoš").
+Page structure is documented in knowledge/KNOWLEDGE.md ("Техника парсинга → Bazoš").
 Requests are strictly sequential with a random pause between them.
 """
 

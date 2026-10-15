@@ -10,9 +10,9 @@ Pipeline (built step by step, see PROMPTS.md):
 - Code, identifiers, comments, commit messages: **English**.
 - Talk to the user: **Russian**.
 - Texts for sellers (message templates, Gemini `message_cs`): **Czech**, formal "vy", short.
-- `data/KNOWLEDGE.md` is the domain knowledge base (buy rules, condition adjustments, scam patterns,
+- `knowledge/KNOWLEDGE.md` is the domain knowledge base (buy rules, condition adjustments, scam patterns,
   page structure). When parser selectors change, update its "Техника парсинга" section.
-- `data/prices.json` is the price list (`market_price`, `liquidity`, `confidence`). Never change prices
+- `knowledge/prices.json` is the price list (`market_price`, `liquidity`, `confidence`). Never change prices
   silently; price changes go through the user.
 - Be polite to sources: sequential requests only, random 2–5 s pause, retries with backoff.
   Never parallelize requests to Bazoš. Never bypass FB login walls/captchas.
@@ -71,5 +71,6 @@ python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. 
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 pytest
 ```
-The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the
+`data/` is runtime only (the DB; on the host a persistent volume is mounted there and hides its contents), so
+reference files live in `knowledge/`. The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the
 DB; it stores no alerts and sends nothing.

@@ -26,7 +26,7 @@ CFG = PricingConfig(home_cities=["Ústí nad Orlicí", "Choceň"], near_cities=[
 
 @pytest.fixture(scope="module")
 def prices() -> PriceList:
-    return PriceList.load(PROJECT_ROOT / "data" / "prices.json")
+    return PriceList.load(PROJECT_ROOT / "knowledge" / "prices.json")
 
 
 def make(title: str, price: int | None, location: str = "Pardubice", **kw) -> Listing:
@@ -282,7 +282,7 @@ def test_ultra_3_offer_and_max(prices):
 def test_config_yaml_tiers_and_knowledge_agree():
     cfg = load_config(PROJECT_ROOT / "config.yaml").pricing
     assert cfg.max_price_tiers == CFG.max_price_tiers  # the defaults are the configured rule
-    knowledge = (PROJECT_ROOT / "data" / "KNOWLEDGE.md").read_text(encoding="utf-8")
+    knowledge = (PROJECT_ROOT / "knowledge" / "KNOWLEDGE.md").read_text(encoding="utf-8")
     for line in max_price_rule_lines(cfg):
         assert line in knowledge
 

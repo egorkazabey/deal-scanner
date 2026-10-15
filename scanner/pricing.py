@@ -7,7 +7,7 @@
    too_cheap, scam_suspect, shop) and a 0-100 score. `evaluate_many()` also catches duplicate batches.
 
 Price list items are parsed with the same `identify()` as listing titles, so a new item in
-data/prices.json is matched automatically as long as its model is one the regexes below know.
+knowledge/prices.json is matched automatically as long as its model is one the regexes below know.
 """
 
 from __future__ import annotations

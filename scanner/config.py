@@ -93,7 +93,7 @@ class MaxPriceTier(BaseModel):
 
 
 class PricingConfig(BaseModel):
-    prices_path: Path = PROJECT_ROOT / "data" / "prices.json"
+    prices_path: Path = PROJECT_ROOT / "knowledge" / "prices.json"
     max_price_tiers: list[MaxPriceTier] = [
         MaxPriceTier(up_to=4999, pct=70, min_margin=1000),
         MaxPriceTier(up_to=12000, pct=78, min_margin=1200),
@@ -128,7 +128,7 @@ class GeminiConfig(BaseModel):
     """Non-secret Gemini options; model ids and rate limits live in .env (GEMINI_*)."""
 
     enabled: bool = True
-    knowledge_path: Path = PROJECT_ROOT / "data" / "KNOWLEDGE.md"  # system instruction
+    knowledge_path: Path = PROJECT_ROOT / "knowledge" / "KNOWLEDGE.md"  # system instruction
     timeout: float = 60.0  # seconds per request
     retries: int = 4  # on 429 (per-minute) / 5xx / network errors
     backoff_base: float = 5.0  # seconds; doubled per attempt unless the API says how long to wait

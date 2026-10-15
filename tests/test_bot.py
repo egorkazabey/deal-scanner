@@ -55,7 +55,7 @@ def _clean_env(monkeypatch):
 def files(tmp_path):
     """Copies of config.yaml and prices.json; settings pointing at them."""
     prices = tmp_path / "prices.json"
-    shutil.copy(PROJECT_ROOT / "data" / "prices.json", prices)
+    shutil.copy(PROJECT_ROOT / "knowledge" / "prices.json", prices)
     text = (PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8")
     config = tmp_path / "config.yaml"
     config.write_text(text.replace("pricing:\n", f"pricing:\n  prices_path: {prices}\n", 1), encoding="utf-8")
