@@ -27,11 +27,21 @@ bazos:
     - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 20000}
 
 pricing:
-  buy_pct: 72                 # target buy price = market_price * buy_pct / 100
-  buy_pct_low_liquidity: 68   # for items with liquidity = 1
+  # Buy ceiling (max_price) by market price band, rounded down to 100:
+  #   max = min(market * pct / 100, market - min_margin)
+  # up_to is the band's upper market price, inclusive; the last band has none.
+  max_price_tiers:
+    - {up_to: 4999,  pct: 70, min_margin: 1000}   # market < 5 000
+    - {up_to: 12000, pct: 78, min_margin: 1200}   # 5 000 – 12 000
+    - {pct: 85, min_margin: 2000}                 # > 12 000
+  low_liquidity_pct_drop: 4   # liquidity = 1: pct - 4 (70 -> 66, 78 -> 74, 85 -> 81)
+  min_profit: 1000            # expected profit (market - price) below this: not a candidate
+  min_profit_by_category: {macbook: 2000, gpu: 2000, pc: 2000}  # also the ceiling's min margin in every band
+  # First offer = min(offer_cap_pct % of the asking price, max_price - offer_below_max_pct %), down to 100
+  offer_cap_pct: 92
+  offer_below_max_pct: 5
   max_price_pct: 90           # candidate if price <= 90 % of market ...
   min_price_pct: 40           # ... and >= 40 % (below: "too_cheap", almost always scam or broken)
-  # Also required: expected profit >= minimum from KNOWLEDGE.md (1 000 Kč, PC/GPU/MacBook 2 000 Kč)
   stale_days: 14              # older listings: flag "stale" + score penalty
   discount_cap_pct: 45        # discount above this adds no more score
   bundle_accessory_pct: 50    # extra controllers in a console bundle add 50 % of their price list price
@@ -47,3 +57,17 @@ gemini:
   retries: 4                  # on 429 (per minute) / 5xx / network errors, exponential backoff
   backoff_base: 5             # seconds, doubled per attempt (or the API's retryDelay)
   # Model ids, RPM/RPD/TPM and quota time zone are in .env (GEMINI_*)
+
+notify:
+  max_age_days: 3             # Telegram gets only listings posted in the last 3 days ...
+  price_drop_days: 3          # ... or with a price drop in the last 3 days
+                              # stale listings (> pricing.stale_days) never: only /top, block "залежавшиеся"
+  watch_drop_pct: 5           # "🔁 Снизится — сообщи": alert when the price drops by >= 5 %
+  max_alerts_per_run: 8       # Gemini reviews per run; the rest waits for the next run
+  interval_min: 10            # Bazoš every 10 min ...
+  jitter_s: 90                # ... + random 0-90 s; a run is skipped while the previous one is going
+  quiet_start: "00:30"        # quiet hours (Prague): scan every 30 min, alerts go out in a morning digest
+  quiet_end: "06:30"
+  quiet_interval_min: 30
+  gone_checks_per_run: 5      # "✍️ Написал" listings missing from the scan: detail pages checked per run
+  gone_check_every_min: 60    # each one at most once per hour

@@ -81,6 +81,59 @@ CREATE TABLE IF NOT EXISTS gemini_usage (
     exhausted      INTEGER NOT NULL DEFAULT 0,  -- the API answered "daily quota exceeded"
     PRIMARY KEY (day, model)
 );
+
+-- Telegram notifications. sent_at NULL = waiting (quiet hours digest or a failed send).
+CREATE TABLE IF NOT EXISTS alerts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    price       INTEGER,
+    kind        TEXT NOT NULL,  -- deal / drop / watch / gone
+    text        TEXT NOT NULL,  -- full HTML message
+    summary     TEXT NOT NULL,  -- one HTML line for the morning digest
+    quiet       INTEGER NOT NULL DEFAULT 0,  -- created in quiet hours: goes into the digest
+    created_at  TEXT NOT NULL,
+    sent_at     TEXT,
+    message_id  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_listing ON alerts (source, listing_id);
+
+-- "🔁 Снизится — сообщи": alert when the price falls >= watch_drop_pct below base_price.
+CREATE TABLE IF NOT EXISTS watches (
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    base_price  INTEGER NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (source, listing_id)
+);
+
+-- One row per scan, for /status.
+CREATE TABLE IF NOT EXISTS runs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at     TEXT NOT NULL,
+    finished_at    TEXT,
+    listings       INTEGER NOT NULL DEFAULT 0,
+    new            INTEGER NOT NULL DEFAULT 0,
+    price_changed  INTEGER NOT NULL DEFAULT 0,
+    candidates     INTEGER NOT NULL DEFAULT 0,
+    alerts         INTEGER NOT NULL DEFAULT 0,
+    errors         TEXT NOT NULL DEFAULT ''
+);
+
+-- Small bot state (paused, ...).
+CREATE TABLE IF NOT EXISTS state (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
+
+-- market_price changes made with /price.
+CREATE TABLE IF NOT EXISTS price_changes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    item        TEXT NOT NULL,
+    old_price   INTEGER NOT NULL,
+    new_price   INTEGER NOT NULL,
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -120,6 +173,12 @@ class Database:
         if "rematched" not in cols:
             with self.conn:
                 self.conn.execute("ALTER TABLE gemini_reviews ADD COLUMN rematched TEXT")
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(listings)")}
+        with self.conn:
+            if "gone_at" not in cols:  # a "contacted" listing that disappeared (HTTP 410/404)
+                self.conn.execute("ALTER TABLE listings ADD COLUMN gone_at TEXT")
+            if "checked_at" not in cols:  # last detail page check of a "contacted" listing
+                self.conn.execute("ALTER TABLE listings ADD COLUMN checked_at TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -285,6 +344,130 @@ class Database:
     def gemini_usage(self, day: str) -> dict[str, sqlite3.Row]:
         rows = self.conn.execute("SELECT * FROM gemini_usage WHERE day = ?", (day,)).fetchall()
         return {r["model"]: r for r in rows}
+
+
+    # --- Telegram ---
+
+    def last_price_drop(self, source: str, listing_id: str) -> tuple[int, int, datetime] | None:
+        """(old, new, when) if the latest price change of the listing was a drop."""
+        rows = self.conn.execute(
+            """SELECT price, seen_at FROM price_history WHERE source = ? AND listing_id = ?
+               ORDER BY id DESC LIMIT 2""",
+            (source, listing_id),
+        ).fetchall()
+        if len(rows) < 2 or rows[0]["price"] is None or rows[1]["price"] is None:
+            return None
+        new, old = rows[0]["price"], rows[1]["price"]
+        return (old, new, datetime.fromisoformat(rows[0]["seen_at"])) if new < old else None
+
+    def was_alerted(self, source: str, listing_id: str, price: int | None) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM alerts WHERE source = ? AND listing_id = ? AND price IS ? AND kind != 'gone'",
+            (source, listing_id, price),
+        ).fetchone() is not None
+
+    def add_alert(
+        self, source: str, listing_id: str, price: int | None, kind: str, text: str, summary: str,
+        quiet: bool = False, now: datetime | None = None,
+    ) -> int:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            cur = self.conn.execute(
+                """INSERT INTO alerts (source, listing_id, price, kind, text, summary, quiet, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (source, listing_id, price, kind, text, summary, int(quiet), ts),
+            )
+            if kind != "gone":
+                self.conn.execute(
+                    "UPDATE listings SET status = 'alerted' WHERE source = ? AND id = ? AND status = 'new'",
+                    (source, listing_id),
+                )
+        return cur.lastrowid
+
+    def pending_alerts(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM alerts WHERE sent_at IS NULL ORDER BY id").fetchall()
+
+    def mark_sent(self, alert_ids: list[int], message_id: int | None, now: datetime | None = None) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.executemany(
+                "UPDATE alerts SET sent_at = ?, message_id = ? WHERE id = ?",
+                [(ts, message_id, i) for i in alert_ids],
+            )
+
+    def set_watch(self, source: str, listing_id: str, base_price: int, now: datetime | None = None) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO watches (source, listing_id, base_price, created_at) VALUES (?, ?, ?, ?)
+                   ON CONFLICT (source, listing_id) DO UPDATE SET base_price = excluded.base_price""",
+                (source, listing_id, base_price, ts),
+            )
+
+    def watches(self) -> dict[tuple[str, str], int]:
+        rows = self.conn.execute("SELECT source, listing_id, base_price FROM watches").fetchall()
+        return {(r["source"], r["listing_id"]): r["base_price"] for r in rows}
+
+    def to_check_gone(self, seen_before: datetime, checked_before: datetime, limit: int) -> list[sqlite3.Row]:
+        """"Contacted" listings missing from the latest scan, not checked recently."""
+        return self.conn.execute(
+            """SELECT * FROM listings WHERE status = 'contacted' AND gone_at IS NULL AND last_seen < ?
+                   AND (checked_at IS NULL OR checked_at < ?)
+               ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?""",
+            (seen_before.isoformat(timespec="seconds"), checked_before.isoformat(timespec="seconds"), limit),
+        ).fetchall()
+
+    def mark_checked(self, source: str, listing_id: str, gone: bool, now: datetime | None = None) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                "UPDATE listings SET checked_at = ?, gone_at = CASE WHEN ? THEN ? ELSE gone_at END "
+                "WHERE source = ? AND id = ?",
+                (ts, int(gone), ts, source, listing_id),
+            )
+
+    def start_run(self, now: datetime | None = None) -> int:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            return self.conn.execute("INSERT INTO runs (started_at) VALUES (?)", (ts,)).lastrowid
+
+    def finish_run(self, run_id: int, now: datetime | None = None, **counts: int | str) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        cols = ", ".join(f"{k} = ?" for k in counts)
+        with self.conn:
+            self.conn.execute(
+                f"UPDATE runs SET finished_at = ?{', ' + cols if cols else ''} WHERE id = ?",
+                (ts, *counts.values(), run_id),
+            )
+
+    def last_runs(self, limit: int = 1) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+    def get_state(self, key: str, default: str | None = None) -> str | None:
+        row = self.conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def set_state(self, key: str, value: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+
+    def log_price_change(self, item: str, old: int, new: int, now: datetime | None = None) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO price_changes (item, old_price, new_price, created_at) VALUES (?, ?, ?, ?)",
+                (item, old, new, ts),
+            )
+
+    def counts(self) -> dict[str, int]:
+        q = "SELECT status, COUNT(*) AS n FROM listings GROUP BY status"
+        out = {r["status"]: r["n"] for r in self.conn.execute(q)}
+        out["total"] = sum(out.values())
+        out["watched"] = self.conn.execute("SELECT COUNT(*) FROM watches").fetchone()[0]
+        return out
 
 
 def _row_to_listing(r: sqlite3.Row) -> Listing:

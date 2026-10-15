@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from scanner.config import PROJECT_ROOT, PricingConfig
+from scanner.config import PROJECT_ROOT, PricingConfig, load_config
 from scanner.models import Listing
 from scanner.pricing import (
     PriceList,
@@ -12,7 +12,10 @@ from scanner.pricing import (
     evaluate_many,
     is_accessory,
     identify,
+    max_buy_price,
+    max_price_rule_lines,
     normalize,
+    offer_price,
     rank,
     stop_reasons,
 )
@@ -207,15 +210,90 @@ def test_accessory(title, accessory):
 def test_metrics_and_candidate(prices):
     ev = evaluate(make("iPhone 15 128GB černý", 7990, "Hradec Králové"), prices, CFG, TODAY)
     assert ev.market_price == 10000
-    assert ev.target_buy == 7200  # 72 %
+    assert ev.max_price == 7800  # min(10 000 × 0.78, 10 000 − 1 200)
+    assert ev.offer_price == 7300  # min(7 990 × 0.92 = 7 350, 7 800 × 0.95 = 7 410) -> down to 100
     assert ev.expected_profit == 2010
     assert ev.discount_pct == pytest.approx(0.201)
     assert ev.is_candidate and 0 < ev.score <= 100
 
 
-def test_low_liquidity_uses_68_pct(prices):
+def test_low_liquidity_drops_pct(prices):
+    item = prices.match("iPhone 15 Plus 128GB").item
+    assert item.liquidity == 1
     ev = evaluate(make("iPhone 15 Plus 128GB", 8000), prices, CFG, TODAY)
-    assert ev.target_buy == 6800
+    assert ev.max_price == max_buy_price(item.market_price, "iphone", 1, CFG)
+    assert ev.max_price == min(item.market_price * 74 // 100, item.market_price - 1200) // 100 * 100
+
+
+# --- tiered buy ceiling (config.yaml pricing.max_price_tiers) and first offer ------------------
+
+
+@pytest.mark.parametrize(
+    "market, category, liquidity, expected",
+    [
+        # market < 5 000: min(market × 0.70, market − 1 000)
+        (1500, "airpods", 2, 500),      # 1 050 vs 500: the margin wins
+        (3333, "airpods", 3, 2300),     # 2 333 vs 2 333 -> 2 300
+        (4000, "apple_watch", 2, 2800),
+        (4999, "iphone", 3, 3400),      # upper bound of the band: 3 499 vs 3 999
+        (4000, "airpods", 1, 2600),     # liquidity 1: 0.66 -> 2 640
+        (4000, "gpu", 2, 2000),         # GPU: margin 2 000 in every band
+        (800, "airpods", 2, 0),         # never negative
+        # 5 000 – 12 000: min(market × 0.78, market − 1 200)
+        (5000, "iphone", 2, 3800),      # lower bound: 3 900 vs 3 800
+        (5400, "iphone", 2, 4200),      # 4 212 vs 4 200
+        (10000, "iphone", 2, 7800),
+        (12000, "playstation", 2, 9300),  # upper bound: 9 360
+        (10000, "iphone", 1, 7400),     # liquidity 1: 0.74
+        (6000, "macbook", 2, 4000),     # MacBook: 4 680 vs 6 000 − 2 000
+        (9000, "pc", 1, 6600),          # PC, liquidity 1: 6 660 vs 7 000
+        # > 12 000: min(market × 0.85, market − 2 000)
+        (12001, "iphone", 2, 10000),    # 10 200 vs 10 001
+        (13800, "apple_watch", 2, 11700),  # Ultra 3: 11 730 vs 11 800
+        (20000, "iphone", 2, 17000),
+        (20000, "iphone", 1, 16200),    # liquidity 1: 0.81
+        (30000, "macbook", 2, 25500),
+    ],
+)
+def test_max_buy_price_tiers(market, category, liquidity, expected):
+    assert max_buy_price(market, category, liquidity, CFG) == expected
+
+
+@pytest.mark.parametrize(
+    "asking, max_price, expected",
+    [
+        (11999, 11700, 11000),  # 11 039 vs 11 115
+        (7000, 8500, 6400),     # 6 440 vs 8 075: 92 % of the asking price
+        (7000, 5800, 5500),     # 6 440 vs 5 510: max − 5 %
+        (2500, 2300, 2100),     # 2 300 vs 2 185
+        (999, 0, 0),
+    ],
+)
+def test_offer_price(asking, max_price, expected):
+    assert offer_price(asking, max_price, CFG) == expected
+
+
+def test_ultra_3_offer_and_max(prices):
+    ev = evaluate(make("Apple Watch Ultra 3 49mm", 11999), prices, CFG, TODAY)
+    assert ev.match.item.model == "Apple Watch Ultra 3" and ev.market_price == 13800
+    assert (ev.max_price, ev.offer_price) == (11700, 11000)
+
+
+def test_config_yaml_tiers_and_knowledge_agree():
+    cfg = load_config(PROJECT_ROOT / "config.yaml").pricing
+    assert cfg.max_price_tiers == CFG.max_price_tiers  # the defaults are the configured rule
+    knowledge = (PROJECT_ROOT / "data" / "KNOWLEDGE.md").read_text(encoding="utf-8")
+    for line in max_price_rule_lines(cfg):
+        assert line in knowledge
+
+
+def test_tiers_must_be_ordered():
+    with pytest.raises(ValueError):
+        PricingConfig(max_price_tiers=[{"up_to": 12000, "pct": 78, "min_margin": 1200},
+                                       {"up_to": 4999, "pct": 70, "min_margin": 1000},
+                                       {"pct": 85, "min_margin": 2000}])
+    with pytest.raises(ValueError):
+        PricingConfig(max_price_tiers=[{"up_to": 4999, "pct": 70, "min_margin": 1000}])
 
 
 def test_not_candidate_above_90_pct(prices):
