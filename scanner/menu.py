@@ -17,7 +17,7 @@ from aiogram.types import (
     BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup,
 )
 
-from scanner import config_edit
+from scanner import config_edit, learn, overrides
 from scanner.config import PROJECT_ROOT, AppConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE, GeminiReviewer, Review, Verdict
@@ -53,6 +53,7 @@ BOT_COMMANDS = [
     BotCommand(command="top", description="Лучшие кандидаты за 24 ч"),
     BotCommand(command="skipped", description="Что отбраковал Gemini"),
     BotCommand(command="settings", description="Потолок покупки, радиус, поиски"),
+    BotCommand(command="prices", description="Отчёт по ценам: что поправить в прайсе"),
     BotCommand(command="logs", description="Последние ошибки"),
     BotCommand(command="pause", description="Остановить сканирование"),
     BotCommand(command="resume", description="Продолжить сканирование"),
@@ -71,7 +72,8 @@ HELP = """\
 /status · прогоны, ошибки, лимиты Gemini
 /top · лучшие кандидаты за 24 ч и «залежавшиеся»
 /skipped · что Gemini отбраковал и почему
-/settings · потолок покупки, радиус, поиски
+/settings · потолок покупки, радиус, поиски, отчёт по ценам
+/prices · отчёт по ценам сейчас (сам приходит по воскресеньям)
 /logs · последние ошибки
 /pause, /resume · остановить и продолжить
 /price iphone 15 128 9500 · поправить market_price
@@ -340,11 +342,13 @@ def screen_settings(cfg: AppConfig) -> Screen:
         f"<b>🔔 Уведомления:</b> объявления не старше {n.max_age_days} дн. или со снижением цены, "
         f"залежавшиеся (&gt; {cfg.pricing.stale_days} дн.) только в топе; до {n.max_alerts_per_run} за прогон\n"
         f"<b>🌙 Тихие часы:</b> {n.quiet_start}-{n.quiet_end}, утром сводка\n\n"
-        "<i>Изменения действуют со следующего прогона и живут до передеплоя: насовсем их вносят в репозиторий.</i>"
+        "<i>Изменения действуют со следующего прогона и сохраняются в базе: после передеплоя бот их восстановит "
+        "(если в репозитории это значение не поменяли).</i>"
     )
     return text, _kb(
         [_btn("📐 Потолок покупки", "m:tiers"), _btn("📍 Радиус", "m:radius")],
-        [_btn("🔎 Поиски", "m:searches"), HOME],
+        [_btn("🔎 Поиски", "m:searches"), _btn("📈 Отчёт по ценам", "m:prices")],
+        [HOME],
     )
 
 
@@ -383,16 +387,52 @@ def screen_remove_search(cfg: AppConfig, index: int) -> Screen:
             _kb([_btn("✅ Удалить", f"a:rmsearch:{index}"), _btn("Отмена", "m:searches")]))
 
 
+# --- price learning report ---------------------------------------------------------------------
+
+
+def report_keyboard(report_id: int, has_open: bool) -> InlineKeyboardMarkup:
+    rows = [[_btn("✅ Применить всё", f"a:papply:{report_id}:all"), _btn("☑️ Выборочно", f"m:pselect:{report_id}")]] \
+        if has_open else []
+    return _kb(*rows, [_btn("🔄 Пересчитать", "m:prices"), _btn("⬅️ Настройки", "m:settings")], [HOME])
+
+
+def screen_prices(settings: Settings, db: Database) -> Screen:
+    """A fresh report from the observations (also what the weekly job sends)."""
+    report_id, report, cfg = learn.new_report(settings, db)
+    return learn.format_report(report, cfg.learn), report_keyboard(report_id, bool(report.proposals))
+
+
+def screen_report(db: Database, report_id: int, note: str = "") -> Screen:
+    rows = learn.proposals(db, report_id)
+    lines = [f"<b>📈 Отчёт №{report_id}</b>"]
+    for p in rows:
+        state = "✅ применено" if p["applied_at"] else ("☑️" if p["selected"] else "⬜")
+        lines.append(f"{p['n']}. {escape(p['item'])}: {kc(p['old_price'])} → <b>{kc(p['new_price'])}</b> · {state}")
+    if note:
+        lines.append(f"\n{escape(note)}")
+    return "\n".join(lines), report_keyboard(report_id, any(not p["applied_at"] for p in rows))
+
+
+def screen_pselect(db: Database, report_id: int) -> Screen:
+    rows = [p for p in learn.proposals(db, report_id) if not p["applied_at"]]
+    text = f"<b>☑️ Выбери, что применить (отчёт №{report_id})</b>\nНажатие переключает позицию."
+    buttons = [[_btn(f"{'✅' if p['selected'] else '⬜'} {p['n']}. {p['item']} → {kc(p['new_price'])}"[:60],
+                     f"a:ptoggle:{report_id}:{p['n']}")] for p in rows[:20]]
+    return text, _kb(*buttons, [_btn("✅ Применить выбранные", f"a:papply:{report_id}:sel")],
+                     [_btn("⬅️ Отчёт", f"m:preport:{report_id}"), HOME])
+
+
 # --- text commands (also used from the menu) ----------------------------------------------------
 
 
-def cmd_pct(settings: Settings, args: str | None) -> str:
+def cmd_pct(settings: Settings, db: Database, args: str | None) -> str:
     if args:
         parts = args.split()
         if len(parts) != 2 or not all(p.isdigit() for p in parts):
             return "Формат: <code>/pct 2 80</code> (ступень, процент)"
         try:
-            cfg = config_edit.set_tier_pct(settings.config_path, int(parts[0]), int(parts[1]))
+            overrides.set_tier_pct(settings, db, int(parts[0]), int(parts[1]))
+            cfg = load_config(settings.config_path)
         except config_edit.ConfigEditError as exc:
             return escape(str(exc))
         head = f"Ступень {parts[0]} → {parts[1]} %. Новые цифры со следующего прогона."
@@ -402,17 +442,17 @@ def cmd_pct(settings: Settings, args: str | None) -> str:
     return f"{head}\n{rule}\n\nKNOWLEDGE.md обнови вручную, если поменял ступени."
 
 
-def cmd_radius(settings: Settings, args: str | None) -> str:
+def cmd_radius(settings: Settings, db: Database, args: str | None) -> str:
     if not args or not args.strip().isdigit():
         return f"Радиус сейчас {load_config(settings.config_path).bazos.radius_km} км. Формат: <code>/radius 60</code>"
     try:
-        config_edit.set_radius(settings.config_path, int(args))
+        overrides.set_radius(settings, db, int(args))
     except config_edit.ConfigEditError as exc:
         return escape(str(exc))
     return f"Радиус Bazoš: {int(args)} км (со следующего прогона)"
 
 
-def cmd_search(settings: Settings, args: str | None) -> str:
+def cmd_search(settings: Settings, db: Database, args: str | None) -> str:
     parts = (args or "list").split()
     action, rest = parts[0], parts[1:]
     try:
@@ -428,23 +468,21 @@ def cmd_search(settings: Settings, args: str | None) -> str:
             if not words:
                 return "Нужен текст запроса"
             lo, hi = (nums + [None, None])[:2]
-            config_edit.add_search(settings.config_path, section, " ".join(words), lo, hi)
+            overrides.add_search(settings, db, section, " ".join(words), lo, hi)
             return f"Добавлен поиск «{escape(' '.join(words))}» [{section}]"
         if action == "remove" and rest:
-            config_edit.remove_search(settings.config_path, " ".join(rest))
-            return f"Удалён поиск «{escape(' '.join(rest))}»"
+            name = overrides.remove_search(settings, db, " ".join(rest))
+            return f"Удалён поиск «{escape(name)}»"
     except config_edit.ConfigEditError as exc:
         return escape(str(exc))
     return "Формат: /search list | add &lt;mobil|pc&gt; &lt;запрос&gt; [от] [до] | remove &lt;имя|номер&gt;"
 
 
 def apply_price(settings: Settings, db: Database, index: int, price: int) -> str:
-    cfg = load_config(settings.config_path)
     try:
-        label, old = config_edit.set_market_price(cfg.pricing.prices_path, index, price)
+        label, old = overrides.set_market_price(settings, db, index, price)
     except config_edit.ConfigEditError as exc:
         return escape(str(exc))
-    db.log_price_change(label, old, price)
     log.warning("market_price changed via Telegram: %s %d -> %d", label, old, price)
     return f"💰 {escape(label)}: {kc(old)} → {kc(price)} Kč (prices.json)"
 
@@ -490,6 +528,12 @@ def render(name: str, args: list[str], settings: Settings, db: Database, next_ru
         return screen_radius(cfg)
     if name == "searches":
         return screen_searches(cfg)
+    if name == "prices":
+        return screen_prices(settings, db)
+    if name == "preport" and args and args[0].isdigit():
+        return screen_report(db, int(args[0]))
+    if name == "pselect" and args and args[0].isdigit():
+        return screen_pselect(db, int(args[0]))
     if name == "rmsearch" and args and args[0].isdigit():
         return screen_remove_search(cfg, int(args[0]))
     return screen_home(cfg, db, next_run)
@@ -501,19 +545,25 @@ def act(action: str, args: list[str], settings: Settings, db: Database) -> tuple
         db.set_state("paused", "1" if action == "pause" else "0")
         return ("⏸ Пауза" if action == "pause" else "▶️ Сканирование продолжается"), (args[0] if args else "home"), []
     try:
+        if action == "ptoggle" and len(args) == 2:
+            learn.toggle(db, int(args[0]), int(args[1]))
+            return "", "pselect", [args[0]]
+        if action == "papply" and len(args) == 2:
+            notes = learn.apply(settings, db, int(args[0]), only_selected=args[1] == "sel")
+            return (f"Применено: {sum('→' in n for n in notes)}" if notes else "Нечего применять"), "preport", [args[0]]
         if action == "tier" and len(args) == 2:
             cfg = load_config(settings.config_path)
             i = int(args[0])
             pct = cfg.pricing.max_price_tiers[i - 1].pct + int(args[1])
-            config_edit.set_tier_pct(settings.config_path, i, pct)
+            overrides.set_tier_pct(settings, db, i, pct)
             return f"Ступень {i}: {pct} %", "tiers", []
         if action == "radius" and args:
-            config_edit.set_radius(settings.config_path, int(args[0]))
+            overrides.set_radius(settings, db, int(args[0]))
             return f"Радиус {args[0]} км", "radius", []
         if action == "rmsearch" and args:
             cfg = load_config(settings.config_path)
             name = cfg.bazos.searches[int(args[0]) - 1].name
-            config_edit.remove_search(settings.config_path, name)
+            overrides.remove_search(settings, db, name)
             return f"Удалён поиск «{name}»", "searches", []
     except (config_edit.ConfigEditError, IndexError, ValueError) as exc:
         return str(exc)[:190], "settings", []

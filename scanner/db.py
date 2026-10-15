@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -115,6 +116,54 @@ CREATE TABLE IF NOT EXISTS pc_specs (
     response    TEXT NOT NULL,
     created_at  TEXT NOT NULL,
     PRIMARY KEY (source, listing_id)
+);
+
+-- Edits made from Telegram (radius, tier pct, searches, market prices), replayed after a redeploy.
+-- base = the repo's value the first edit replaced (JSON), value = the wanted value (JSON).
+CREATE TABLE IF NOT EXISTS overrides (
+    kind        TEXT NOT NULL,
+    key         TEXT NOT NULL,
+    base        TEXT NOT NULL,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
+);
+
+-- Price learning (scanner.learn): one row per listing and price list item, last asking price.
+-- gone_at = the detail page answered 404/410 (a probable sale at `price`).
+CREATE TABLE IF NOT EXISTS price_observations (
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    item        TEXT NOT NULL,  -- price list label "model variant"
+    price       INTEGER NOT NULL,
+    first_seen  TEXT NOT NULL,
+    last_seen   TEXT NOT NULL,
+    checked_at  TEXT,
+    gone_at     TEXT,
+    PRIMARY KEY (source, listing_id, item)
+);
+
+-- Devices the parser recognized but the price list does not have (suggestions for new items).
+CREATE TABLE IF NOT EXISTS unknown_models (
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    model       TEXT NOT NULL,  -- e.g. "iphone 16 pro max 1024gb"
+    title       TEXT NOT NULL,
+    price       INTEGER,
+    last_seen   TEXT NOT NULL,
+    PRIMARY KEY (source, listing_id)
+);
+
+-- Weekly price reports and their proposals (applied only by the owner's button).
+CREATE TABLE IF NOT EXISTS price_proposals (
+    report_id   INTEGER NOT NULL,
+    n           INTEGER NOT NULL,   -- position in the report
+    item        TEXT NOT NULL,
+    old_price   INTEGER NOT NULL,
+    new_price   INTEGER NOT NULL,
+    selected    INTEGER NOT NULL DEFAULT 1,
+    applied_at  TEXT,
+    PRIMARY KEY (report_id, n)
 );
 
 -- One row per scan, for /status.
@@ -355,6 +404,30 @@ class Database:
         rows = self.conn.execute("SELECT * FROM gemini_usage WHERE day = ?", (day,)).fetchall()
         return {r["model"]: r for r in rows}
 
+
+    # --- overrides ---
+
+    def set_override(self, kind: str, key: str, base, value, now: datetime | None = None) -> None:
+        """Record an edit; the first edit's base is kept, and going back to it drops the record."""
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        row = self.conn.execute("SELECT base FROM overrides WHERE kind = ? AND key = ?", (kind, key)).fetchone()
+        first_base = json.loads(row["base"]) if row else base
+        with self.conn:
+            if first_base == value and kind != "search":
+                self.conn.execute("DELETE FROM overrides WHERE kind = ? AND key = ?", (kind, key))
+                return
+            self.conn.execute(
+                """INSERT INTO overrides (kind, key, base, value, updated_at) VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT (kind, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+                (kind, key, json.dumps(first_base, ensure_ascii=False), json.dumps(value, ensure_ascii=False), ts),
+            )
+
+    def overrides(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM overrides ORDER BY updated_at").fetchall()
+
+    def delete_override(self, kind: str, key: str) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM overrides WHERE kind = ? AND key = ?", (kind, key))
 
     def get_pc_specs(self, source: str, listing_id: str) -> sqlite3.Row | None:
         return self.conn.execute(

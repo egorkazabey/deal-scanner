@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import html
 import logging
+import re
 from datetime import datetime, timedelta
 
 from rich.console import Console
 from rich.table import Table
 
+from scanner import learn
 from scanner.bot import ScannerApp, send_pending
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
@@ -313,6 +316,7 @@ def main() -> None:
     p_eval.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
 
     sub.add_parser("save-fixtures", help="save real Bazoš HTML into tests/fixtures")
+    sub.add_parser("price-report", help="price list proposals from the observations (what /prices shows)")
 
     args = parser.parse_args()
     settings = Settings()
@@ -331,6 +335,15 @@ def main() -> None:
         show_reviews(settings, hours=args.hours, skipped=args.skipped)
     elif args.command == "evaluate":
         evaluate_db(settings, days=args.days, show_all=args.all)
+    elif args.command == "price-report":
+        db = Database(settings.db_path)
+        try:
+            cfg = load_config(settings.config_path)
+            report = learn.build_report(db, PriceList.load(cfg.pricing.prices_path), cfg.learn, datetime.now())
+            text = re.sub(r"<[^>]+>", "", learn.format_report(report, cfg.learn, limit=100))
+            console.print(html.unescape(text), markup=False)
+        finally:
+            db.close()
     elif args.command == "save-fixtures":
         asyncio.run(save_fixtures(settings))
 
