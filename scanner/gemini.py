@@ -29,7 +29,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 from scanner.config import GeminiConfig, PricingConfig, Settings
 from scanner.db import Database
-from scanner.models import ListingDetail
+from scanner.models import Listing, ListingDetail
+from scanner.pc import PC_SYSTEM_PROMPT, PcSpecs
 from scanner.pricing import Evaluation, PriceList, evaluate, max_buy_price, max_price_rule_lines, offer_price
 
 log = logging.getLogger(__name__)
@@ -410,10 +411,12 @@ class GeminiReviewer:
 
     async def _ask(self, ev: Evaluation, today: date) -> tuple[str, Verdict]:
         """One answer from the first model with quota left; raises NoAI when there is none."""
-        prompt = build_prompt(ev, self.pricing, today)
+        return await self._ask_prompt(build_prompt(ev, self.pricing, today), Verdict, self.system_instruction)
+
+    async def _ask_prompt(self, prompt: str, schema: type[BaseModel], system: str) -> tuple[str, Any]:
         while model := self.available_model():
             try:
-                return model, await self._call(model, prompt)
+                return model, await self._call(model, prompt, schema, system)
             except DailyQuotaExceeded:
                 log.warning("Gemini %s: daily quota exceeded, switching model", model)
                 self.db.mark_gemini_exhausted(self.day(), model)
@@ -421,6 +424,22 @@ class GeminiReviewer:
                 log.warning("Gemini unavailable (%s), candidate goes out without AI", exc)
                 raise NoAI(f"Gemini недоступен: {exc}") from exc
         raise NoAI("дневной лимит Gemini исчерпан")
+
+    async def extract_pc(self, listing: Listing) -> PcSpecs:
+        """Hardware of a ready-built PC from its title and description (cached per listing).
+
+        Raises NoAI when Gemini can't answer (the PC is then not valued in this run).
+        """
+        row = self.db.get_pc_specs(listing.source, listing.id)
+        if row:
+            return PcSpecs.model_validate_json(row["response"])
+        if self.disabled_reason:
+            raise NoAI(self.disabled_reason)
+        prompt = json.dumps({"title": listing.title, "price": listing.price,
+                             "description": listing.description or "(описания нет)"}, ensure_ascii=False, indent=1)
+        model, specs = await self._ask_prompt(prompt, PcSpecs, PC_SYSTEM_PROMPT)
+        self.db.save_pc_specs(listing.source, listing.id, model, specs.model_dump_json())
+        return specs
 
     async def _rematch(
         self, ev: Evaluation, model: str, verdict: Verdict, today: date
@@ -463,14 +482,14 @@ class GeminiReviewer:
         )
         return (outcome or ev), model, verdict, rematched
 
-    async def _call(self, model: str, prompt: str) -> Verdict:
+    async def _call(self, model: str, prompt: str, schema: type[BaseModel], system: str) -> Any:
         config = types.GenerateContentConfig(
-            system_instruction=self.system_instruction,
+            system_instruction=system,
             response_mime_type="application/json",
-            response_schema=Verdict,
+            response_schema=schema,
             temperature=0.2,
         )
-        estimate = (len(self.system_instruction) + len(prompt)) // 3 + 1000
+        estimate = (len(system) + len(prompt)) // 3 + 1000
         error = ""
         for attempt in range(self.cfg.retries + 1):
             slot = await self._limiters[model].acquire(estimate)
@@ -501,7 +520,7 @@ class GeminiReviewer:
                 )
                 log.info("Gemini %s: %d prompt + %d output tokens", model, prompt_t, total_t - prompt_t)
                 try:
-                    return resp.parsed if isinstance(resp.parsed, Verdict) else Verdict.model_validate_json(resp.text)
+                    return resp.parsed if isinstance(resp.parsed, schema) else schema.model_validate_json(resp.text)
                 except (ValidationError, ValueError, TypeError) as exc:
                     error = f"invalid JSON: {exc}"
             if attempt < self.cfg.retries:

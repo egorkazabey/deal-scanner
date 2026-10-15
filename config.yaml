@@ -23,8 +23,8 @@ bazos:
     - {name: xbox,            section: pc,    query: "xbox",            price_min: 400,  price_max: 20000}
     - {name: nintendo switch, section: pc,    query: "nintendo switch", price_min: 1000, price_max: 10000}
     - {name: herní pc,        section: pc,    query: "herní pc",        price_min: 5000, price_max: 60000}
-    - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 20000}
-    - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 20000}
+    - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 25000}
+    - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 25000}
 
 pricing:
   # Buy ceiling (max_price) by market price band, rounded down to 100:
@@ -64,6 +64,7 @@ notify:
                               # stale listings (> pricing.stale_days) never: only /top, block "залежавшиеся"
   watch_drop_pct: 5           # "🔁 Снизится — сообщи": alert when the price drops by >= 5 %
   max_alerts_per_run: 8       # Gemini reviews per run; the rest waits for the next run
+  pc_specs_per_run: 5         # ready-built PCs: Gemini reads the hardware of at most 5 new ones per run
   interval_min: 10            # Bazoš every 10 min ...
   jitter_s: 90                # ... + random 0-90 s; a run is skipped while the previous one is going
   quiet_start: "00:30"        # quiet hours (Prague): scan every 30 min, alerts go out in a morning digest

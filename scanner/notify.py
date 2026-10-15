@@ -8,6 +8,8 @@ from html import escape
 from scanner.config import PricingConfig
 from scanner.gemini import Review
 from scanner.models import Listing
+from scanner.pc import PcSpecs, PcValuation, breakdown_lines
+from scanner.pricing import Evaluation
 
 SOURCE_NAMES = {"bazos": "Bazoš", "fb": "FB"}
 VERDICT_EMOJI = {"buy": "🟢", "negotiate": "🟡", "skip": "🔴"}
@@ -126,6 +128,55 @@ def format_alert(
         f"{emoji} {drop}<a href=\"{escape(listing.url)}\">{escape(_model(review))}</a> — {kc(price)} Kč · "
         f"предложить {kc(offer)} · макс {kc(max_price)} · {escape(listing.location or '?')}"
     )
+    return "\n".join(lines), summary
+
+
+def pc_message(specs: PcSpecs, offer: int | None) -> str:
+    """Seller message for a PC (KNOWLEDGE.md template): ask for what the listing does not say."""
+    unknown = [name for name, known in (("základní desky", specs.motherboard), ("zdroje", specs.psu)) if not known]
+    ask = f" Mohl byste napsat přesný model {' a '.join(unknown)}?" if unknown else ""
+    price = f" Šlo by to za {offer} Kč při osobním předání?" if offer else ""
+    return f"Dobrý den, je PC ještě k dispozici?{price}{ask} Byla grafická karta použitá na těžbu? Děkuji."
+
+
+def format_pc_alert(
+    kind: str, ev: Evaluation, specs: PcSpecs, valuation: PcValuation, today: date, old_price: int | None = None,
+) -> tuple[str, str]:
+    """(full message, digest line) for a ready-built PC valued from its components."""
+    listing, item = ev.listing, ev.match.item
+    price, market, offer, max_price = listing.price, ev.market_price, ev.offer_price, ev.max_price
+    emoji = "🟢" if price is not None and max_price is not None and price <= max_price else "🟡"
+    drop = f"📉 {kc(old_price)} → " if kind == "drop" and old_price else ""
+    where = ", ".join(x for x in (SOURCE_NAMES.get(listing.source, listing.source), listing.location,
+                                  age_words(listing.posted_date, today)) if x)
+    name = f"ПК {item.variant}" if item.variant else "ПК"
+    lines = [f"🖥 {emoji} {drop}<b>{escape(name)} — {kc(price)} Kč</b>  ({escape(where)})"]
+    if kind == "drop":
+        lines.insert(0, "📉 Снижение цены")
+    lines += [escape(line) for line in breakdown_lines(valuation)]
+    lines.append(f"Рынок ~{kc(market)} · предложить {kc(offer)} · максимум {kc(max_price)}")
+    if None not in (market, price, offer, max_price):
+        worst, best = market - min(price, max_price), market - offer
+        profit = kc(best) if worst >= best else f"{kc(worst)}–{kc(best)}"
+        lines.append(f"Прибыль ~{profit} · ликвидность {liquidity_dots(item.liquidity)}")
+    if specs.condition_notes:
+        lines.append("📋 " + escape(" · ".join(specs.condition_notes)))
+    flags = [f"висит {(today - listing.posted_date).days} дн." for f in ev.flags if f == "stale" and listing.posted_date]
+    flags += [_FLAG_NAMES[f] for f in ev.flags if f in _FLAG_NAMES]
+    flags += valuation.flags + specs.red_flags
+    if specs.is_oem:
+        flags.append(f"OEM-сборка (−{valuation.oem_discount_pct} %)")
+    if specs.scam_risk != "low":
+        flags.append(f"риск мошенничества: {specs.scam_risk}")
+    unique: dict[str, str] = {}
+    for f in flags:
+        unique.setdefault(f.casefold(), f)
+    lines.append("⚠️ флаги: " + (escape("; ".join(unique.values())) if unique else "—"))
+    lines.append("🤖 железо прочитал Gemini, цена по таблице компонентов (knowledge/components.json)")
+    lines.append(f"💬 <code>{escape(pc_message(specs, offer))}</code>")
+    lines.append(f"🔗 {escape(listing.url)}")
+    summary = (f"🖥 {emoji} {drop}<a href=\"{escape(listing.url)}\">{escape(name)}</a> — {kc(price)} Kč · "
+               f"предложить {kc(offer)} · макс {kc(max_price)} · {escape(listing.location or '?')}")
     return "\n".join(lines), summary
 
 

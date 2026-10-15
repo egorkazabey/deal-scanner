@@ -107,6 +107,16 @@ CREATE TABLE IF NOT EXISTS watches (
     PRIMARY KEY (source, listing_id)
 );
 
+-- Hardware of ready-built PCs as Gemini read it (scanner.pc.PcSpecs JSON), once per listing.
+CREATE TABLE IF NOT EXISTS pc_specs (
+    source      TEXT NOT NULL,
+    listing_id  TEXT NOT NULL,
+    model       TEXT NOT NULL,
+    response    TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (source, listing_id)
+);
+
 -- One row per scan, for /status.
 CREATE TABLE IF NOT EXISTS runs (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -345,6 +355,20 @@ class Database:
         rows = self.conn.execute("SELECT * FROM gemini_usage WHERE day = ?", (day,)).fetchall()
         return {r["model"]: r for r in rows}
 
+
+    def get_pc_specs(self, source: str, listing_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM pc_specs WHERE source = ? AND listing_id = ?", (source, listing_id)
+        ).fetchone()
+
+    def save_pc_specs(self, source: str, listing_id: str, model: str, response: str,
+                      now: datetime | None = None) -> None:
+        ts = (now or datetime.now()).isoformat(timespec="seconds")
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO pc_specs (source, listing_id, model, response, created_at) VALUES (?, ?, ?, ?, ?)",
+                (source, listing_id, model, response, ts),
+            )
 
     # --- Telegram ---
 

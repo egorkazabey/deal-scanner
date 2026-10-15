@@ -417,10 +417,10 @@ def _gpu(t: str, item: bool) -> Identity | None:
     if _PC_RE.search(t) and not _GPU_WORD_RE.search(t):
         return None  # a whole PC / laptop with a GPU, not a graphics card
     vram = _memory(t, _VRAM)
-    nv = re.search(r"\b(?:(rtx|gtx) )?([1-5]0[5-9]0)((?: (?:ti|super))*)\b", t)
+    nv = re.search(r"\b(?:(rtx|gtx) )?([1-5]0[5-9]0|16[56]0)((?: (?:ti|super))*)\b", t)
     if nv and (nv.group(1) or _GPU_CONTEXT_RE.search(t)):
         model = f"rtx {nv.group(2)}{nv.group(3)}"
-        if nv.group(2).startswith("10"):
+        if nv.group(2).startswith(("10", "16")):  # GTX 10xx / 16xx
             model = "g" + model[1:]
         return Identity("gpu", model, {"vram": vram}, pos=nv.start())
     amd = re.search(r"\b(?:rx|radeon(?: rx)?) (\d{3,4})(?: (xtx|xt|gre))?\b", t)
@@ -765,18 +765,20 @@ def _city(location: str | None) -> str:
 
 
 def evaluate(
-    listing: Listing, prices: PriceList, cfg: PricingConfig, today: date | None = None
+    listing: Listing, prices: PriceList, cfg: PricingConfig, today: date | None = None,
+    match: Match | None = None,
 ) -> Evaluation:
+    """`match` skips the title matching: a ready-built PC valued from its components (scanner.pc)."""
     ev = Evaluation(listing)
     title = normalize(listing.title)
     full = title + (" " + normalize(listing.description) if listing.description else "")
-    ident = identify(title)
+    ident = match.identity if match else identify(title)
 
     ev.stop = stop_reasons(full)
     if "výměna" in ev.stop and not exchange_only(title):
         ev.stop.remove("výměna")  # sale with a possible swap ("prodám nebo výměna", "důvodem je výměna")
         ev.flags.append("возможен обмен")
-    if is_accessory(title, ident):
+    if match is None and is_accessory(title, ident):
         ev.flags.append("accessory")
     if _SHOP_RE.search(full):
         ev.flags.append("shop")
@@ -785,7 +787,7 @@ def evaluate(
     if listing.posted_date and (today - listing.posted_date).days > cfg.stale_days:
         ev.flags.append("stale")
 
-    ev.match = prices.match_identity(ident) if ident else None
+    ev.match = match or (prices.match_identity(ident) if ident else None)
     if ev.match is None:
         return ev
     item = ev.match.item
