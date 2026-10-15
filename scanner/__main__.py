@@ -13,6 +13,7 @@ from rich.table import Table
 
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database, UpsertKind
+from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
 
@@ -22,7 +23,7 @@ console = Console()
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
 
 
-async def run_once(settings: Settings, dry: bool, show_all: bool) -> None:
+async def run_once(settings: Settings, dry: bool, show_all: bool, ai: bool, ai_limit: int | None) -> None:
     cfg = load_config(settings.config_path)
     prices = PriceList.load(cfg.pricing.prices_path)
     db = Database(settings.db_path)
@@ -30,30 +31,149 @@ async def run_once(settings: Settings, dry: bool, show_all: bool) -> None:
         async with BazosClient(cfg.bazos) as client:
             result = await client.scan()
 
-        labels: dict[tuple[str, str], str] = {}
-        counts = {kind: 0 for kind in UpsertKind}
-        for listing in result.listings:
-            upsert = db.upsert(listing)
-            counts[upsert.kind] += 1
-            if upsert.kind is UpsertKind.NEW:
-                labels[(listing.source, listing.id)] = "NEW"
-            elif upsert.kind is UpsertKind.PRICE_CHANGED:
-                labels[(listing.source, listing.id)] = f"{_fmt_price(upsert.old_price)} →"
+            labels: dict[tuple[str, str], str] = {}
+            counts = {kind: 0 for kind in UpsertKind}
+            for listing in result.listings:
+                upsert = db.upsert(listing)
+                counts[upsert.kind] += 1
+                if upsert.kind is UpsertKind.NEW:
+                    labels[(listing.source, listing.id)] = "NEW"
+                elif upsert.kind is UpsertKind.PRICE_CHANGED:
+                    labels[(listing.source, listing.id)] = f"{_fmt_price(upsert.old_price)} →"
+                # Keep the description loaded earlier, so the rules see it and no detail is refetched.
+                if listing.description is None and (row := db.get(listing.source, listing.id)):
+                    listing.description = row["description"]
+
+            evaluations = evaluate_many(result.listings, prices, cfg.pricing)
+            _print_evaluations(evaluations, labels, show_all)
+            console.print(
+                f"Fetched {len(result.listings)} unique listings: "
+                f"[green]{counts[UpsertKind.NEW]} new[/], "
+                f"[yellow]{counts[UpsertKind.PRICE_CHANGED]} price changed[/], "
+                f"{counts[UpsertKind.UNCHANGED]} unchanged."
+            )
+            for err in result.errors:
+                console.print(f"[red]error:[/] {err}")
+
+            if ai:
+                candidates = rank(evaluations)[:ai_limit]
+                reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db)
+                reviews = await review_candidates(
+                    candidates, reviewer, db, prices, cfg.pricing, client.fetch_detail
+                )
+                _print_reviews(reviews, reviewer, as_json=False)
+    finally:
+        db.close()
+    if not dry:
+        log.info("Notifications are not implemented yet (Telegram comes in step 4)")
+
+
+async def review_db(
+    settings: Settings, days: float, limit: int, ids: list[str], as_json: bool, refresh: bool
+) -> None:
+    """Gemini for the given listing ids plus the top `limit` other candidates already in the DB."""
+    cfg = load_config(settings.config_path)
+    prices = PriceList.load(cfg.pricing.prices_path)
+    db = Database(settings.db_path)
+    try:
+        listings = db.listings(seen_since=datetime.now() - timedelta(days=days))
+        evaluations = evaluate_many(listings, prices, cfg.pricing)
+        by_id = {e.listing.id: e for e in evaluations}
+        for missing in [i for i in ids if i not in by_id]:
+            console.print(f"[yellow]{missing}: not in the DB (seen in the last {days:g} days)[/]")
+        picked = [by_id[i] for i in ids if i in by_id]
+        for e in picked:
+            if not e.is_candidate:
+                flags = e.flags + [f"stop:{x}" for x in e.stop] + e.scam_reasons
+                console.print(f"[dim]{e.listing.id} {e.listing.title}: not a candidate by rules ({', '.join(flags) or '> 90 %'})[/]")
+        picked = [e for e in picked if e.is_candidate]
+        picked += [e for e in rank(evaluations) if e.listing.id not in ids][:limit]
+
+        if refresh:  # e.g. after changing the rules: ask again instead of using the cache
+            for e in picked:
+                db.delete_review(e.listing.source, e.listing.id)
+        reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db)
+        async with BazosClient(cfg.bazos) as client:
+            reviews = await review_candidates(picked, reviewer, db, prices, cfg.pricing, client.fetch_detail)
+        _print_reviews(reviews, reviewer, as_json)
     finally:
         db.close()
 
-    evaluations = evaluate_many(result.listings, prices, cfg.pricing)
-    _print_evaluations(evaluations, labels, show_all)
-    console.print(
-        f"Fetched {len(result.listings)} unique listings: "
-        f"[green]{counts[UpsertKind.NEW]} new[/], "
-        f"[yellow]{counts[UpsertKind.PRICE_CHANGED]} price changed[/], "
-        f"{counts[UpsertKind.UNCHANGED]} unchanged."
-    )
-    for err in result.errors:
-        console.print(f"[red]error:[/] {err}")
-    if not dry:
-        log.info("Notifications are not implemented yet (Telegram comes in step 4)")
+
+def show_reviews(settings: Settings, hours: float, skipped: bool) -> None:
+    """Stored Gemini reviews (`skipped`: only those not sent) and logged pricing mismatches."""
+    cfg = load_config(settings.config_path)
+    prices = PriceList.load(cfg.pricing.prices_path)
+    db = Database(settings.db_path)
+    try:
+        since = datetime.now() - timedelta(hours=hours)
+        table = Table(title="Gemini: не отправлено" if skipped else "Gemini reviews", header_style="bold")
+        for col in ("When", "Verdict", "Scam", "Price", "Adj. market", "Model", "Title", "Reason", "URL"):
+            table.add_column(col, overflow="fold")
+        for r in db.reviews(since, only_hidden=skipped):
+            v = Verdict.model_validate_json(r["response"])
+            table.add_row(
+                r["created_at"][5:16].replace("T", " "), v.verdict, v.scam_risk, _fmt_price(r["price"]),
+                _fmt_price(v.adjusted_market_price), r["model"], r["title"], v.reason_ru, r["url"],
+            )
+        console.print(table)
+
+        mismatches = db.mismatches(since)
+        if mismatches:
+            mt = Table(title="pricing.py vs Gemini (to fix pricing.py)", header_style="bold")
+            for col in ("Title", "Rules item", "Gemini says", "Gemini item", "Outcome"):
+                mt.add_column(col, overflow="fold")
+            for m in mismatches:
+                mt.add_row(m["title"], m["rules_item"], m["gemini_model"], m["gemini_item"] or "—", m["outcome"])
+            console.print(mt)
+        _print_usage(GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db))
+    finally:
+        db.close()
+
+
+def _print_reviews(reviews: list[Review], reviewer: GeminiReviewer, as_json: bool) -> None:
+    table = Table(title="Gemini second opinion", header_style="bold")
+    for col, kw in [
+        ("Model (Gemini)", {"max_width": 30}), ("Price", {"justify": "right"}), ("Verdict", {}),
+        ("Offer", {"justify": "right"}), ("Max", {"justify": "right"}), ("Adj. market", {"justify": "right"}),
+        ("Flags", {"max_width": 46}), ("Title", {"max_width": 34}),
+    ]:
+        table.add_column(col, overflow="fold", **kw)
+    for rv in reviews:
+        l, ev, v = rv.evaluation.listing, rv.evaluation, rv.verdict
+        rules_flags = [f for f in ev.flags if f != "low_profit"] + [f"stop:{x}" for x in ev.stop] + ev.scam_reasons
+        if v is None:
+            verdict = "[dim]rules ✗[/]" if rv.rules_skip else "[yellow]без ИИ[/]"
+            note = rv.rules_skip or rv.no_ai_reason or ""
+            table.add_row(ev.match.item.label if ev.match else "", _fmt_price(l.price), verdict, "", "",
+                          _fmt_price(ev.market_price), note, l.title)
+            continue
+        color = {"buy": "green", "negotiate": "yellow", "skip": "red"}[v.verdict]
+        flags = rules_flags + v.red_flags + ([f"scam:{v.scam_risk}"] if v.scam_risk != "low" else [])
+        if rv.rematched:
+            flags.append(f"rematch: {rv.rematched}")
+        table.add_row(
+            f"{v.model} {v.variant}".strip(), _fmt_price(l.price),
+            f"[{color}]{v.verdict}[/]" + ("" if rv.notify else " [dim](не шлём)[/]"),
+            _fmt_price(v.offer_price), _fmt_price(v.max_price), _fmt_price(v.adjusted_market_price),
+            "; ".join(dict.fromkeys(flags)), l.title,
+        )
+    console.print(table)
+    if as_json:
+        for rv in reviews:
+            if rv.verdict:
+                console.print(f"[bold]{rv.evaluation.listing.title}[/]  [dim]{rv.evaluation.listing.url}[/]")
+                console.print_json(rv.verdict.model_dump_json())
+    _print_usage(reviewer)
+
+
+def _print_usage(reviewer: GeminiReviewer) -> None:
+    for model, u in reviewer.usage().items():
+        console.print(
+            f"[dim]Gemini {model} ({reviewer.day()}): {u['requests']} req, {u['left']} left of "
+            f"{reviewer.settings.gemini_rpd}, tokens {u['prompt_tokens']} in / {u['output_tokens']} out, "
+            f"{u['errors']} errors[/]"
+        )
 
 
 def evaluate_db(settings: Settings, days: float, show_all: bool) -> None:
@@ -161,6 +281,19 @@ def main() -> None:
     p_run.add_argument("--dry", action="store_true", help="no notifications, only print to console")
     p_run.add_argument("--source", choices=["bazos"], default="bazos")
     p_run.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
+    p_run.add_argument("--no-ai", action="store_true", help="skip the Gemini second opinion")
+    p_run.add_argument("--ai-limit", type=int, default=None, help="Gemini for at most N top candidates")
+
+    p_review = sub.add_parser("review", help="Gemini second opinion for top candidates from the DB")
+    p_review.add_argument("--limit", type=int, default=5)
+    p_review.add_argument("--days", type=float, default=2, help="listings seen in the last N days")
+    p_review.add_argument("--ids", nargs="*", default=[], help="listing ids to review first (Bazoš id)")
+    p_review.add_argument("--json", action="store_true", help="print the full Gemini JSON")
+    p_review.add_argument("--refresh", action="store_true", help="ignore cached reviews of these listings")
+
+    p_reviews = sub.add_parser("reviews", help="stored Gemini reviews and today's Gemini usage")
+    p_reviews.add_argument("--hours", type=float, default=24)
+    p_reviews.add_argument("--skipped", action="store_true", help="only reviews that were not sent")
 
     p_eval = sub.add_parser("evaluate", help="re-evaluate listings from the DB without network")
     p_eval.add_argument("--days", type=float, default=2, help="listings seen in the last N days")
@@ -176,9 +309,14 @@ def main() -> None:
         handlers=[RichHandler(console=console, show_path=False)],
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
 
     if args.command == "run-once":
-        asyncio.run(run_once(settings, dry=args.dry, show_all=args.all))
+        asyncio.run(run_once(settings, args.dry, args.all, ai=not args.no_ai, ai_limit=args.ai_limit))
+    elif args.command == "review":
+        asyncio.run(review_db(settings, days=args.days, limit=args.limit, ids=args.ids, as_json=args.json, refresh=args.refresh))
+    elif args.command == "reviews":
+        show_reviews(settings, hours=args.hours, skipped=args.skipped)
     elif args.command == "evaluate":
         evaluate_db(settings, days=args.days, show_all=args.all)
     elif args.command == "save-fixtures":

@@ -109,7 +109,7 @@ TYPICAL_TITLES = [
     ("Apple watch SE 40mm", "Apple Watch SE (1 gen) 40 / 44 мм", "low"),
     ("Apple Watch Series 8 45mm nerez ocel", "Apple Watch Series 8/9 нерж. сталь", "high"),
     ("Apple Watch Ultra 2 49mm titan", "Apple Watch Ultra 2 49 мм", "high"),
-    ("Apple Watch Series 10 42mm", None, None),  # only 46 mm priced; 42 mm is cheaper
+    ("Apple Watch Series 10 42mm", "Apple Watch Series 10 42 мм", "high"),
     ("AirPods Pro 2 USB-C", "AirPods Pro 2 Lightning / USB-C", "high"),
     ("Airpods pro", "AirPods Pro 1 2019–2021", "low"),
     ("AirPods 4 s ANC", "AirPods 4 с ANC", "high"),
@@ -310,3 +310,93 @@ def test_rank_only_candidates_sorted(prices):
         [e.listing.id for e in ranked], key=lambda i: -next(e.score for e in ranked if e.listing.id == i)
     )
     assert {e.listing.id for e in ranked} == {"1", "3"}
+
+
+# --- accessories by brand / word, stale, min profit, discount cap, bundles ----------------------
+
+
+@pytest.mark.parametrize(
+    "title, accessory",
+    [
+        ("HORI Racing Wheel APEX PS4", True),
+        ("Herní set volantu a pedálů HORI RWA pro PS4/PC – jako nový", True),
+        ("Logitech G29 volant PS5", True),
+        ("Thrustmaster T150 PS4", True),
+        ("PS5 headset Pulse 3D", True),
+        ("Sluchátka k iPhone 15", True),
+        ("Nabíječka iPhone 13", True),
+        ("PlayStation Camera PS4", True),
+        ("Dock Nintendo Switch", True),
+        ("FIFA 24 hra PS5", True),
+        ("Ovladač PS4 DualShock", True),
+        ("Gamepad Xbox One", False),  # priced item "Геймпад Xbox"
+        ("DualSense ovladač PS5 bílý", False),  # priced item
+        ("AirPods Pro 2 sluchátka", False),
+        ("iPhone 13 128GB + nabíječka", False),
+        ("PS5 Slim + 2 hry", False),
+        ("Nintendo Switch OLED s dockem", False),
+        ("Konzole Xbox Series S + ovladač", False),
+    ],
+)
+def test_accessory_words_and_brands(title, accessory):
+    t = normalize(title)
+    assert is_accessory(t, identify(t)) is accessory
+
+
+def test_hori_wheel_is_not_a_candidate(prices):
+    ev = evaluate(make("HORI Racing Wheel APEX PS4", 1550), prices, CFG, TODAY)
+    assert "accessory" in ev.flags and not ev.is_candidate
+
+
+def test_stale_listing_flag_and_penalty(prices):
+    fresh = evaluate(make("iPhone 15 128GB", 7500), prices, CFG, TODAY)
+    stale = evaluate(make("iPhone 15 128GB", 7500, posted_date=date(2026, 9, 30)), prices, CFG, TODAY)
+    edge = evaluate(make("iPhone 15 128GB", 7500, posted_date=date(2026, 10, 1)), prices, CFG, TODAY)
+    assert "stale" in stale.flags and stale.is_candidate  # still a candidate, just ranked lower
+    assert "stale" not in edge.flags  # exactly 14 days is not stale
+    assert fresh.score - stale.score >= 10
+
+
+def test_min_profit_is_required(prices):
+    # Switch Lite: market 2 700; 2 400 is < 90 % of market, but the profit of 300 Kč is not worth a trip.
+    ev = evaluate(make("Nintendo Switch Lite", 2400), prices, CFG, TODAY)
+    assert "low_profit" in ev.flags and not ev.is_candidate
+    ok = evaluate(make("Nintendo Switch Lite", 1600), prices, CFG, TODAY)
+    assert "low_profit" not in ok.flags and ok.is_candidate
+
+
+def test_discount_above_cap_scores_the_same(prices):
+    market = 10000  # iPhone 15 128GB
+    at_cap = evaluate(make("iPhone 15 128GB", int(market * 0.55)), prices, CFG, TODAY)
+    beyond = evaluate(make("iPhone 15 128GB", int(market * 0.45)), prices, CFG, TODAY)
+    assert at_cap.is_candidate and beyond.is_candidate
+    # Bigger profit still counts, but the 45-point discount part is capped.
+    assert beyond.score - at_cap.score <= 20 * (market * 0.10) / (1000 * 4) + 1
+
+
+def test_bundle_extra_controllers_count_half(prices):
+    single = evaluate(make("PS5 Slim 1TB", 8000), prices, CFG, TODAY)
+    double = evaluate(make("PS5 Slim 1TB + 2 ovladače", 8000), prices, CFG, TODAY)
+    dualsense = prices.match("DualSense").item.market_price
+    assert double.market_price - single.market_price == round(dualsense * 0.5, -2)
+    assert any("комплект" in n for n in double.match.notes)
+    with_one = evaluate(make("PS5 Slim 1TB s ovladačem", 8000), prices, CFG, TODAY)
+    assert with_one.market_price == single.market_price
+
+
+@pytest.mark.parametrize(
+    "title, description, excluded",
+    [
+        ("iPhone 15 128GB", "Prodám nebo možná výměna.", False),
+        ("Apple Watch Ultra 3 (2025) 49m", "Důvodem prodeje je výměna za nový model.", False),
+        ("iPhone 15 128GB prodám nebo vyměním", None, False),
+        ("iPhone 15 128GB výměna za Android", None, True),
+        ("iPhone 15 128GB vyměním", None, True),
+    ],
+)
+def test_exchange_excludes_only_swap_titles(prices, title, description, excluded):
+    ev = evaluate(make(title, 7500, description=description), prices, CFG, TODAY)
+    assert ("výměna" in ev.stop) is excluded
+    assert ev.is_candidate is (not excluded)
+    if not excluded:
+        assert "возможен обмен" in ev.flags

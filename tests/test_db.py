@@ -55,3 +55,20 @@ def test_set_status():
     db.upsert(make_listing())
     db.set_status("bazos", "123", Status.CONTACTED)
     assert db.get("bazos", "123")["status"] == "contacted"
+
+
+def test_migration_adds_rematched_column(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """CREATE TABLE gemini_reviews (source TEXT NOT NULL, listing_id TEXT NOT NULL, price INTEGER NOT NULL,
+               model TEXT NOT NULL, response TEXT NOT NULL, verdict TEXT NOT NULL, scam_risk TEXT NOT NULL,
+               notify INTEGER NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (source, listing_id, price))"""
+    )
+    conn.commit()
+    conn.close()
+    db = Database(path)
+    db.save_review("bazos", "1", 100, "m", "{}", "buy", "low", True, rematched="a → b")
+    assert db.get_review("bazos", "1", 100)["rematched"] == "a → b"

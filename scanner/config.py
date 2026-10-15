@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 import yaml
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -18,11 +20,37 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_chat_id: int | None = None
     gemini_api_key: str | None = None
-    gemini_model: str | None = None
+    # Explicit model ids only (no *-latest aliases): the free tier quota is per model.
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_fallback_model: str | None = "gemini-3.1-flash-lite"  # used when the main model's RPD is spent
+    # Our own limits per model, ~50 % of the free tier (15 RPM, 250K TPM, 500 RPD per model).
+    gemini_rpm: int = 7
+    gemini_rpd: int = 250
+    gemini_tpm: int = 120_000
+    # Free tier daily quota resets at midnight Pacific Time (~09:00 in Prague).
+    gemini_quota_tz: str = "America/Los_Angeles"
 
     db_path: Path = PROJECT_ROOT / "data" / "scanner.db"
     config_path: Path = PROJECT_ROOT / "config.yaml"
     log_level: str = "INFO"
+
+    @field_validator("gemini_model", "gemini_fallback_model", mode="before")
+    @classmethod
+    def _explicit_model(cls, value: str | None, info: ValidationInfo) -> str | None:
+        value = (value or "").strip()
+        if not value:
+            return cls.model_fields[info.field_name].default
+        if value.lower() in {"none", "off"} and info.field_name == "gemini_fallback_model":
+            return None
+        if not re.fullmatch(r"gemini-[a-z0-9.\-]+", value) or value.endswith("latest"):
+            raise ValueError(f"{value!r}: use an explicit Gemini model id like 'gemini-3.5-flash-lite'")
+        return value
+
+    @field_validator("gemini_quota_tz")
+    @classmethod
+    def _known_tz(cls, value: str) -> str:
+        ZoneInfo(value)  # raises for an unknown zone
+        return value
 
 
 class BazosSearch(BaseModel):
@@ -62,13 +90,27 @@ class PricingConfig(BaseModel):
     buy_pct_low_liquidity: int = 68  # for liquidity = 1
     max_price_pct: int = 90  # candidate: price <= market * 90 %
     min_price_pct: int = 40  # below that: "too_cheap" (scam or broken), not a candidate
+    stale_days: int = 14  # older listings get the "stale" flag and a score penalty
+    discount_cap_pct: int = 45  # a bigger discount scores no higher (it is more likely a catch)
+    bundle_accessory_pct: int = 50  # extra controllers in a console bundle add this % of their price
     home_cities: list[str] = []  # score bonus +10
     near_cities: list[str] = []  # score bonus +6
+
+
+class GeminiConfig(BaseModel):
+    """Non-secret Gemini options; model ids and rate limits live in .env (GEMINI_*)."""
+
+    enabled: bool = True
+    knowledge_path: Path = PROJECT_ROOT / "data" / "KNOWLEDGE.md"  # system instruction
+    timeout: float = 60.0  # seconds per request
+    retries: int = 4  # on 429 (per-minute) / 5xx / network errors
+    backoff_base: float = 5.0  # seconds; doubled per attempt unless the API says how long to wait
 
 
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
     pricing: PricingConfig = PricingConfig()
+    gemini: GeminiConfig = GeminiConfig()
 
 
 def load_config(path: Path) -> AppConfig:
