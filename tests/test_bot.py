@@ -10,13 +10,13 @@ from datetime import datetime, timedelta
 import pytest
 from aiogram.client.session.base import BaseSession
 from aiogram.methods import SendMessage
-from aiogram.types import Chat, Message, Update, User
+from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from rich.console import Console
 
 from scanner import config_edit
-from scanner.bot import (
-    ScannerApp, cmd_logs, cmd_pct, code_version, health_problem, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, deliver,
-    in_quiet_hours, make_bot,
+from scanner.bot import ScannerApp, deliver, health_problem, in_quiet_hours, make_bot
+from scanner.menu import (
+    act, cmd_logs, cmd_pct, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, code_version, render,
 )
 from scanner.config import PROJECT_ROOT, AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
@@ -127,16 +127,16 @@ def test_status_and_top(files):
     db.finish_run(run_id, now, listings=2, new=2, candidates=2, alerts=1)
     cfg = load_config(settings.config_path)
     status = cmd_status(settings, cfg, db)
-    assert "Объявлений 2: новых 2" in status and "GEMINI_API_KEY не задан" in status
+    assert "📦 Объявлений 2 · новых 2" in status and "GEMINI_API_KEY не задан" in status
     n = len(PriceList.load(cfg.pricing.prices_path).items)
     assert f"прайс {n} позиций" in status.split("\n")[1]
     assert f"Последний прогон: {now.astimezone(PRAGUE):%d.%m. %H:%M}" in status  # Prague time, not server time
     top = cmd_top(cfg, db, now)
-    assert "<b>Топ-1 за 24 ч</b>" in top and "<b>Залежавшиеся (> 14 дн.)</b>" in top
+    assert "<b>🏆 Топ за 24 ч: 1</b>" in top and "<b>🕸 Залежавшиеся (&gt; 14 дн.)</b>" in top
     assert top.index("https://x/1") < top.index("Залежавшиеся") < top.index("https://x/2")
     db.set_status("bazos", "1", Status.HIDDEN)
     assert "https://x/1" not in cmd_top(cfg, db, now)
-    assert cmd_skipped(db) == "Gemini за 24 ч ничего не отбраковал"
+    assert "Gemini за 24 ч ничего не отбраковал" in cmd_skipped(db)
 
 
 def test_pct_changes_one_tier_and_keeps_the_file(files):
@@ -224,7 +224,8 @@ def test_bot_answers_only_its_chat(files):
         await app.dp.feed_update(app.bot, _update(999, "/help"))
         assert session.calls == []
         await app.dp.feed_update(app.bot, _update(CHAT, "/help"))
-        assert len(session.calls) == 1 and "/status" in session.calls[0].text
+        assert len(session.calls) == 2 and "/status" in session.calls[0].text  # help + menu
+        assert session.calls[0].reply_markup.keyboard[0][0].text == "📊 Статус"  # the bottom keyboard
         await app.dp.feed_update(app.bot, _update(CHAT, "/pause"))
         assert app.db.get_state("paused") == "1"
 
@@ -268,7 +269,7 @@ def test_health_check_alerts_once_and_recovers(files):
 
 def test_logs_command_and_files(files, tmp_path):
     settings, _, _ = files
-    assert cmd_logs(settings) == "В логе ошибок пусто 👍"
+    assert "В логе ошибок пусто 👍" in cmd_logs(settings)
     setup_logging("INFO", settings.log_dir, Console(file=io.StringIO()))
     try:
         logging.getLogger("scanner.test").info("just info")
@@ -280,5 +281,84 @@ def test_logs_command_and_files(files, tmp_path):
     errors = (settings.log_dir / "errors.log").read_text(encoding="utf-8")
     assert "bazos <search> failed" in errors and "just info" not in errors
     out = cmd_logs(settings)
-    assert out.startswith("<b>Последние ошибки") and "bazos &lt;search&gt; failed" in out
+    assert out.startswith("<b>📜 Последние ошибки") and "bazos &lt;search&gt; failed" in out
     logging.basicConfig(force=True)  # detach the file handlers again
+
+
+# --- menu screens -------------------------------------------------------------------------------
+
+
+def _all_callbacks(markup):
+    return [b.callback_data for row in markup.inline_keyboard for b in row] if markup else []
+
+
+@pytest.mark.parametrize("name", ["home", "status", "top", "skipped", "logs", "settings", "tiers", "radius",
+                                  "searches", "unknown"])
+def test_every_screen_renders(files, name):
+    settings, _, _ = files
+    db = Database(":memory:")
+    text, markup = render(name, [], settings, db)
+    assert text.startswith("<b>") and markup is not None
+    assert all(len(d.encode()) <= 64 for d in _all_callbacks(markup))  # Telegram's callback_data limit
+    if name not in ("home", "unknown"):  # unknown names fall back to the menu itself
+        assert "m:home" in _all_callbacks(markup)  # every screen leads back to the menu
+
+
+def test_top_numbers_open_cards(files):
+    settings, _, _ = files
+    db = Database(":memory:")
+    now = datetime.now()
+    db.upsert(Listing("bazos", "1", "https://x/1", "iPhone 15 128GB", 7000, "Pardubice", now.date()), now)
+    text, markup = render("top", [], settings, db)
+    assert "<b>1.</b> ⚪" in text and "Номер ниже откроет карточку" in text
+    assert _all_callbacks(markup)[0] == "m:card:bazos:1"
+    card, card_kb = render("card", ["bazos", "1"], settings, db)
+    assert "iPhone 15 128 ГБ — 7 000 Kč" in card and "Gemini это объявление ещё не проверял" in card
+    assert _all_callbacks(card_kb)[:3] == ["c:bazos:1", "h:bazos:1", "w:bazos:1"] and "m:top" in _all_callbacks(card_kb)
+    db.add_alert("bazos", "1", 7000, "deal", "the alert text", "s")
+    assert render("card", ["bazos", "1"], settings, db)[0] == "the alert text"  # the alert as it was sent
+
+
+def test_menu_actions_edit_config(files):
+    settings, _, _ = files
+    db = Database(":memory:")
+    toast, screen, _ = act("tier", ["2", "1"], settings, db)
+    assert toast == "Ступень 2: 79 %" and screen == "tiers"
+    assert load_config(settings.config_path).pricing.max_price_tiers[1].pct == 79
+    assert act("radius", ["45"], settings, db)[0] == "Радиус 45 км"
+    assert any(b.text == "✅ 45" for row in render("radius", [], settings, db)[1].inline_keyboard for b in row)
+    n = len(load_config(settings.config_path).bazos.searches)
+    confirm, kb = render("rmsearch", ["1"], settings, db)
+    assert confirm == "Удалить поиск «iphone»?" and _all_callbacks(kb) == ["a:rmsearch:1", "m:searches"]
+    assert act("rmsearch", ["1"], settings, db)[0] == "Удалён поиск «iphone»"
+    assert len(load_config(settings.config_path).bazos.searches) == n - 1
+    assert act("pause", ["status"], settings, db)[1] == "status" and db.get_state("paused") == "1"
+    assert "a:resume:home" in _all_callbacks(render("home", [], settings, db)[1])
+    act("resume", [], settings, db)
+    assert db.get_state("paused") == "0"
+
+
+def _callback(chat_id: int, data: str) -> Update:
+    msg = Message(message_id=7, date=datetime.now(), text="menu", chat=Chat(id=chat_id, type="private"))
+    return Update(update_id=2, callback_query=CallbackQuery(
+        id="q1", from_user=User(id=chat_id, is_bot=False, first_name="x"), chat_instance="ci", message=msg, data=data))
+
+
+def test_buttons_through_the_dispatcher(files):
+    settings, _, _ = files
+    session = FakeSession()
+    app = ScannerApp(settings, bot=make_bot("123456:TEST", session=session))
+
+    async def scenario():
+        await app.dp.feed_update(app.bot, _update(CHAT, "🏆 Топ"))  # bottom keyboard button
+        assert session.calls[-1].text.startswith("<b>🏆 Топ")
+        await app.dp.feed_update(app.bot, _callback(CHAT, "m:settings"))
+        edit = next(c for c in session.calls if type(c).__name__ == "EditMessageText")
+        assert edit.text.startswith("<b>⚙️ Настройки") and edit.message_id == 7
+        await app.dp.feed_update(app.bot, _callback(CHAT, "a:tier:1:1"))
+        assert load_config(settings.config_path).pricing.max_price_tiers[0].pct == 71
+        assert any(type(c).__name__ == "AnswerCallbackQuery" and c.text == "Ступень 1: 71 %" for c in session.calls)
+        await app.dp.feed_update(app.bot, _update(CHAT, "⏯ Пауза / старт"))
+        assert app.db.get_state("paused") == "1"
+
+    run(scenario())
