@@ -1,7 +1,8 @@
 """Ready-built PCs: specs (extracted by Gemini) → value from knowledge/components.json.
 
 Gemini only reads the listing and fills `PcSpecs`; the price is computed here, by rules:
-PC value = sum of used component prices × factor (0.8), OEM builds −15 %, a bundled monitor is
+PC value = sum of used component prices × factor (1.0 / 0.9 / 0.8 by hardware class, see
+`pc_factor()`), OEM builds −15 %, a bundled monitor is
 added separately at its full price. GPU prices come from prices.json (category gpu). An unknown CPU
 model, RAM or SSD size or monitor takes the nearest known one and makes the valuation "low".
 Without a CPU or a GPU the PC is not valued ("нет данных о железе").
@@ -74,7 +75,7 @@ PC_SYSTEM_PROMPT = """\
 
 @dataclass
 class Components:
-    factor: float
+    factors: dict  # high / mid / low + the class thresholds, see pc_factor()
     oem_discount_pct: int
     liquidity: int
     cpu: dict[str, int]
@@ -90,7 +91,7 @@ class Components:
         d = json.loads(Path(path).read_text(encoding="utf-8"))
         sizes = lambda table: {k: {int(s): p for s, p in v.items()} for k, v in table.items()}  # noqa: E731
         return cls(
-            factor=d["factor"], oem_discount_pct=d["oem_discount_pct"], liquidity=d["liquidity"],
+            factors=d["factors"], oem_discount_pct=d["oem_discount_pct"], liquidity=d["liquidity"],
             cpu=d["cpu"], ram=sizes(d["ram"]), storage=sizes(d["storage"]), motherboard=d["motherboard"],
             psu=d["psu"], case_cooler=d["case_cooler"], monitors=d["monitors"],
         )
@@ -113,6 +114,7 @@ class PcValuation:
     parts: list[Part] = field(default_factory=list)
     parts_sum: int = 0
     factor: float = 0.8
+    factor_reason: str = ""
     oem_discount_pct: int = 0  # applied, 0 if not OEM
     pc_value: int = 0  # parts_sum × factor (× OEM discount)
     monitor: Part | None = None
@@ -209,7 +211,7 @@ def gpu_match(text: str, prices: PriceList) -> tuple[Match | None, bool]:
 
 
 def value_pc(specs: PcSpecs, comp: Components, prices: PriceList) -> PcValuation:
-    v = PcValuation(factor=comp.factor)
+    v = PcValuation()
     cpu = cpu_price(specs.cpu, comp.cpu) if specs.cpu else None
     gpu, gpu_exact = gpu_match(specs.gpu, prices) if specs.gpu else (None, False)
     if cpu is None or gpu is None:
@@ -252,7 +254,8 @@ def value_pc(specs: PcSpecs, comp: Components, prices: PriceList) -> PcValuation
     v.parts.append(Part("корпус", "корпус + кулер", comp.case_cooler))
 
     v.parts_sum = sum(p.price for p in v.parts)
-    value = v.parts_sum * comp.factor
+    v.factor, v.factor_reason = pc_factor(specs, gpu.item, comp, prices)
+    value = v.parts_sum * v.factor
     if specs.is_oem:
         v.oem_discount_pct = comp.oem_discount_pct
         value *= 1 - comp.oem_discount_pct / 100
@@ -280,6 +283,42 @@ def value_pc(specs: PcSpecs, comp: Components, prices: PriceList) -> PcValuation
     return v
 
 
+def _old_gpu(model: str) -> bool:
+    """GTX 10xx and older NVIDIA, RX 4xx / 5xx (Polaris) and older AMD."""
+    t = normalize(model)
+    nv = re.match(r"gtx (\d{3,4})\b", t)
+    amd = re.match(r"rx (\d{3,4})\b", t)
+    return bool(nv and int(nv.group(1)) < 1100 or amd and int(amd.group(1)) < 1000)
+
+
+def pc_factor(specs: PcSpecs, gpu: PriceItem, comp: Components, prices: PriceList) -> tuple[float, str]:
+    """How a whole PC sells relative to its parts: 1.0 modern gaming, 0.9 the rest, 0.8 old hardware.
+
+    low: DDR3, a GTX 10xx-class GPU or older, or a CPU before Intel 8th gen. high: a GPU priced at least
+    like the RX 6600 (≈ RTX 3060) and a CPU from Intel 10th gen / Ryzen 3000. Everything else is mid.
+    """
+    f = comp.factors
+    brand, _, number, _ = _cpu_key(specs.cpu)
+    gen = _generation(number)
+    old = []
+    if specs.ram_type == "DDR3":
+        old.append("DDR3")
+    if _old_gpu(gpu.model):
+        old.append(gpu.model)
+    if brand in f["low_cpu_before"] and gen < f["low_cpu_before"][brand]:
+        old.append(f"CPU {gen} gen")
+    if old:
+        return f["low"], "старое железо: " + ", ".join(old)
+    ref = prices.match(f["high_gpu_from"])
+    strong_gpu = ref is not None and gpu.market_price >= ref.item.market_price
+    new_cpu = gen >= f["high_cpu_from"].get(brand, 99)
+    if strong_gpu and new_cpu:
+        return f["high"], f"GPU от уровня {f['high_gpu_from']}, CPU от Intel 10 gen / Ryzen 3000"
+    why = [] if strong_gpu else [f"GPU слабее {f['high_gpu_from']}"]
+    why += [] if new_cpu else [f"CPU {gen} gen"]
+    return f["mid"], ", ".join(why)
+
+
 def _monitor(specs: PcSpecs, monitors: list[dict]) -> dict:
     return min(monitors, key=lambda m: (
         specs.monitor_resolution != "unknown" and m["resolution"] != specs.monitor_resolution,
@@ -300,7 +339,7 @@ def breakdown_lines(v: PcValuation) -> list[str]:
     """Human-readable calculation (Russian), for Telegram and the CLI."""
     kc = lambda x: f"{x:,}".replace(",", " ")  # noqa: E731
     lines = [f"{p.kind} {p.label}: {kc(p.price)}" + (f" ({p.priced_as})" if p.priced_as else "") for p in v.parts]
-    calc = f"Сумма {kc(v.parts_sum)} × {v.factor:g}"
+    calc = f"Сумма {kc(v.parts_sum)} × {v.factor:.1f} ({v.factor_reason})"
     if v.oem_discount_pct:
         calc += f" × OEM −{v.oem_discount_pct} %"
     lines.append(f"{calc} = {kc(v.pc_value)}")

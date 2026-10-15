@@ -49,7 +49,7 @@ Pipeline (built step by step, see PROMPTS.md):
   "gone" for contacted listings (detail page 404/410). Options: `notify:` in config.yaml
 - `scanner/pc.py`: ready-built PCs. `is_pc_build()` (title), `PcSpecs` (Gemini response schema: hardware only,
   Gemini does not price), `value_pc()` = used part prices from `knowledge/components.json` (GPU from
-  prices.json) × 0.8, OEM −15 %, bundled monitor at full price, nearest CPU/size → low confidence, no CPU or GPU
+  prices.json) × `pc_factor()` (1.0 modern / 0.9 rest / 0.8 old hardware), OEM −15 %, bundled monitor at full price, nearest CPU/size → low confidence, no CPU or GPU
   → not valued. The pipeline reads at most `notify.pc_specs_per_run` new PCs per run (cached in `pc_specs`),
   then `evaluate(..., match=pc_match())` applies the usual ceiling, offer and score
 - `scanner/notify.py`: message texts (HTML), digest splitting
