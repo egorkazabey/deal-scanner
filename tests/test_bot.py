@@ -12,13 +12,14 @@ from aiogram.types import Chat, Message, Update, User
 
 from scanner import config_edit
 from scanner.bot import (
-    ScannerApp, cmd_pct, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, deliver,
+    ScannerApp, cmd_pct, code_version, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, deliver,
     in_quiet_hours, make_bot,
 )
 from scanner.config import PROJECT_ROOT, AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE
 from scanner.models import Listing
+from scanner.pricing import PriceList
 
 CHAT = 4242
 
@@ -123,6 +124,9 @@ def test_status_and_top(files):
     cfg = load_config(settings.config_path)
     status = cmd_status(settings, cfg, db)
     assert "Объявлений 2: новых 2" in status and "GEMINI_API_KEY не задан" in status
+    n = len(PriceList.load(cfg.pricing.prices_path).items)
+    assert f"прайс {n} позиций" in status.split("\n")[1]
+    assert f"Последний прогон: {now.astimezone(PRAGUE):%d.%m. %H:%M}" in status  # Prague time, not server time
     top = cmd_top(cfg, db, now)
     assert "<b>Топ-1 за 24 ч</b>" in top and "<b>Залежавшиеся (> 14 дн.)</b>" in top
     assert top.index("https://x/1") < top.index("Залежавшиеся") < top.index("https://x/2")
@@ -188,6 +192,13 @@ def test_config_edit_rejects_invalid_result(files):
     _, config, _ = files
     with pytest.raises(config_edit.ConfigEditError):
         config_edit.set_radius(config, 0)
+
+
+def test_code_version_from_host_env(monkeypatch):
+    monkeypatch.setenv("GIT_COMMIT", "abcdef1234567")
+    assert code_version() == "abcdef1"
+    monkeypatch.delenv("GIT_COMMIT")
+    assert code_version() != ""  # .git in a checkout, "?" in an image without it
 
 
 # --- chat filter -------------------------------------------------------------------------------
