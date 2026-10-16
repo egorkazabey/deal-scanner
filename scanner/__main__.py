@@ -298,19 +298,35 @@ async def fb_login(settings: Settings) -> None:
     except BrowserSetupError as exc:
         console.print(f"[red]{exc}[/]\nTry: python -m playwright install chromium")
         return
-    console.print(f"Opening Chromium with the profile {settings.fb_profile_dir}. Log in to Facebook "
-                  "(2FA if asked); the window closes by itself once you are in. Nothing is typed for you.")
     export = PROJECT_ROOT / "fb_state.json"
-    async with FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=False) as fb:
-        ok = await fb.login_interactively()
-        if ok:
-            await fb.export_state(export)
+    # The installed Google Chrome first: on a Mac the bundled "Chrome for Testing" may be closed by the
+    # system right away, and FB sees a regular browser. The session file works with Chromium on a server.
+    attempts = [("Google Chrome", "chrome", settings.fb_profile_dir.with_name("fb_profile_chrome")),
+                ("Chromium (Playwright)", None, settings.fb_profile_dir)]
+    ok, errors = None, []
+    for name, channel, profile in attempts:
+        console.print(f"Opening {name}. Log in to Facebook (2FA if asked); the window closes by itself once you "
+                      "are in. Nothing is typed for you.")
+        try:
+            async with FacebookClient(cfg, profile, settings.fb_browser_path, headless=False, channel=channel) as fb:
+                ok = await fb.login_interactively()
+                if ok:
+                    await fb.export_state(export)
+            break
+        except Exception as exc:  # noqa: BLE001 - not installed / closed right away: try the next browser
+            errors.append(f"{name}: {str(exc).splitlines()[0][:200]}")
+            console.print(f"[yellow]{name} did not work: {errors[-1]}[/]")
+    if ok is None:
+        console.print("[red]No browser could be opened.[/] Details: DEBUG=pw:browser python -m scanner fb-login")
+        return
     if ok:
+        settings.fb_state_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.fb_state_path.write_bytes(export.read_bytes())  # local FB runs import it too
         db = Database(settings.db_path)
         db.set_state("fb_blocked", "0")  # the bot on this machine may use FB again
         db.close()
-        console.print(f"[green]Logged in, profile saved.[/] Bot on a server: send [bold]{export}[/] to the bot "
-                      "in Telegram (it deletes the message after importing). It is your FB session: do not share it.")
+        console.print(f"[green]Logged in.[/] Bot on a server: send [bold]{export}[/] to the bot in Telegram "
+                      "(it deletes the message after importing). It is your FB session: do not share it.")
         console.print("Check here: python -m scanner run-once --source fb --dry")
     else:
         console.print("[yellow]No login detected (window closed or 10 min passed). Run fb-login again.[/]")

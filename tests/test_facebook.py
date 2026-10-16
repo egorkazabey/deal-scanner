@@ -282,3 +282,54 @@ def test_client_imports_the_session_once(tmp_path):
 
     asyncio.run(scenario())
     assert not state.exists() and (tmp_path / "fb_state.imported.json").exists()  # not imported again
+
+
+def test_fb_login_falls_back_from_chrome_to_chromium(tmp_path, monkeypatch):
+    import scanner.__main__ as cli
+
+    opened = []
+
+    class FakeClient:
+        def __init__(self, cfg, profile, browser_path, headless, channel=None):
+            self.channel = channel
+
+        async def __aenter__(self):
+            opened.append(self.channel)
+            if self.channel == "chrome":
+                raise RuntimeError("Target page, context or browser has been closed")
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def login_interactively(self):
+            return True
+
+        async def export_state(self, path):
+            path.write_text('{"cookies": []}', encoding="utf-8")
+
+    async def chromium_ok(settings):
+        return []
+
+    monkeypatch.setattr(cli, "FacebookClient", FakeClient)
+    monkeypatch.setattr(cli, "ensure_chromium", chromium_ok)
+    monkeypatch.setattr(cli, "PROJECT_ROOT", tmp_path)
+    settings = Settings(_env_file=None, db_path=tmp_path / "t.db", fb_profile_dir=tmp_path / "data" / "fb_profile",
+                        fb_state_path=tmp_path / "data" / "fb_state.json")
+    asyncio.run(cli.fb_login(settings))
+    assert opened == ["chrome", None]
+    assert (tmp_path / "fb_state.json").exists() and settings.fb_state_path.exists()
+
+    opened.clear()
+
+    class ClosedByOwner(FakeClient):
+        async def __aenter__(self):
+            opened.append(self.channel)
+            return self
+
+        async def login_interactively(self):
+            return False  # the owner closed the window: no second browser
+
+    monkeypatch.setattr(cli, "FacebookClient", ClosedByOwner)
+    asyncio.run(cli.fb_login(settings))
+    assert opened == ["chrome"]

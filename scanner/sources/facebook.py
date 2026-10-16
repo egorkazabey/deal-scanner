@@ -163,9 +163,10 @@ class FacebookClient:
     source = SOURCE
 
     def __init__(self, cfg: AppConfig, profile_dir: Path, browser_path: str | None = None, headless: bool | None = None,
-                 state_path: Path | None = None):
+                 state_path: Path | None = None, channel: str | None = None):
         self.cfg, self.fb = cfg, cfg.facebook
         self.profile_dir, self.browser_path, self.state_path = profile_dir, browser_path, state_path
+        self.channel = channel  # "chrome" = the installed Google Chrome (fb-login on a PC)
         self.headless = self.fb.headless if headless is None else headless
         self._pw = self._ctx = self._page = None
         self._details = 0
@@ -178,10 +179,15 @@ class FacebookClient:
             raise RuntimeError("Playwright is not installed: pip install -e \".[fb]\"") from exc
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self._pw = await async_playwright().start()
-        self._ctx = await self._pw.chromium.launch_persistent_context(
-            str(self.profile_dir), headless=self.headless, executable_path=self.browser_path,
-            viewport={"width": 1280, "height": 900},
-        )
+        try:
+            self._ctx = await self._pw.chromium.launch_persistent_context(
+                str(self.profile_dir), headless=self.headless, viewport={"width": 1280, "height": 900},
+                **({"channel": self.channel} if self.channel else {"executable_path": self.browser_path}),
+            )
+        except Exception:
+            await self._pw.stop()
+            self._pw = None
+            raise
         self._ctx.set_default_timeout(self.fb.timeout * 1000)
         await self._import_state()
         self._page = self._ctx.pages[0] if self._ctx.pages else await self._ctx.new_page()
