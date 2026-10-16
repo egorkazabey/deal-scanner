@@ -13,6 +13,7 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 
 from scanner.config import Settings
 
@@ -25,9 +26,27 @@ class BrowserSetupError(Exception):
     """Chromium can't be started here; the message says why (Russian, for the owner)."""
 
 
+def default_browsers_dir() -> Path:
+    """Where `playwright install` puts browsers when PLAYWRIGHT_BROWSERS_PATH is not set."""
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Caches" / "ms-playwright"
+    if sys.platform == "win32":
+        return Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "ms-playwright"
+    return Path(os.environ.get("XDG_CACHE_HOME", home / ".cache")) / "ms-playwright"
+
+
 def use_browsers_dir(settings: Settings) -> None:
-    """Point Playwright at the persistent download dir, unless the environment already has a browser."""
-    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(settings.fb_browsers_dir))
+    """Use the persistent download dir (data/ms-playwright) unless a browser is already set up.
+
+    On a PC `python -m playwright install chromium` puts Chromium into the default cache: keep using it.
+    On the host there is none, so the download goes to the persistent volume.
+    """
+    if "PLAYWRIGHT_BROWSERS_PATH" in os.environ:
+        return
+    if any(default_browsers_dir().glob("chromium-*")):
+        return
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(settings.fb_browsers_dir)
 
 
 async def _probe(settings: Settings) -> str | None:

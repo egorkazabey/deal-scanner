@@ -77,3 +77,16 @@ def test_snap_stub_is_not_a_browser(tmp_path):
     real = tmp_path / "chromium"
     real.write_bytes(b"\x7fELF" + b"\0" * 100)
     assert not bs._real_binary(str(stub)) and bs._real_binary(str(real)) and not bs._real_binary(str(tmp_path / "x"))
+
+
+def test_existing_default_browser_is_used(monkeypatch, tmp_path):
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH")
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(bs, "default_browsers_dir", lambda: cache)
+    settings = Settings(_env_file=None, fb_browsers_dir=tmp_path / "data" / "ms-playwright")
+    bs.use_browsers_dir(settings)
+    assert bs.os.environ["PLAYWRIGHT_BROWSERS_PATH"] == str(tmp_path / "data" / "ms-playwright")  # none yet
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH")
+    (cache / "chromium-1248").mkdir(parents=True)
+    bs.use_browsers_dir(settings)
+    assert "PLAYWRIGHT_BROWSERS_PATH" not in bs.os.environ  # `playwright install` already put one there

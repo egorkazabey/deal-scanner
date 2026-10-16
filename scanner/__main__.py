@@ -14,7 +14,7 @@ from rich.table import Table
 
 from scanner import learn
 from scanner.bot import ScannerApp, send_pending
-from scanner.browser_setup import use_browsers_dir
+from scanner.browser_setup import BrowserSetupError, ensure_chromium, use_browsers_dir
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
 from scanner.fb_worker import run_worker
@@ -292,7 +292,12 @@ async def fb_login(settings: Settings) -> None:
     """A visible browser on Marketplace; you log in by hand. The session stays in the profile and is
     also exported to fb_state.json, which you send to the bot when it runs on a server."""
     cfg = load_config(settings.config_path)
-    use_browsers_dir(settings)
+    try:
+        if done := await ensure_chromium(settings):  # downloads Chromium if this PC has none yet
+            console.print("; ".join(done))
+    except BrowserSetupError as exc:
+        console.print(f"[red]{exc}[/]\nTry: python -m playwright install chromium")
+        return
     console.print(f"Opening Chromium with the profile {settings.fb_profile_dir}. Log in to Facebook "
                   "(2FA if asked); the window closes by itself once you are in. Nothing is typed for you.")
     export = PROJECT_ROOT / "fb_state.json"
