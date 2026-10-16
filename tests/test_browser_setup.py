@@ -90,3 +90,12 @@ def test_existing_default_browser_is_used(monkeypatch, tmp_path):
     (cache / "chromium-1248").mkdir(parents=True)
     bs.use_browsers_dir(settings)
     assert "PLAYWRIGHT_BROWSERS_PATH" not in bs.os.environ  # `playwright install` already put one there
+
+
+def test_download_into_the_default_cache(monkeypatch):
+    # A Chromium of another revision in the default cache: no PLAYWRIGHT_BROWSERS_PATH, download there.
+    monkeypatch.delenv("PLAYWRIGHT_BROWSERS_PATH")
+    monkeypatch.setattr(bs, "use_browsers_dir", lambda settings: None)
+    calls = _fake(monkeypatch, ["Executable doesn't exist at /x/chromium-1248", None], runs=[(0, "ok")])
+    assert asyncio.run(bs.ensure_chromium(Settings(_env_file=None))) == ["Chromium скачан"]
+    assert calls == [("install", "chromium")]

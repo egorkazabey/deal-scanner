@@ -118,7 +118,8 @@ async def ensure_chromium(settings: Settings) -> list[str]:
     done: list[str] = []
     error = await _probe(settings)
     if error and settings.fb_auto_install and "Executable doesn't exist" in error:
-        log.warning("Chromium missing, downloading into %s", os.environ["PLAYWRIGHT_BROWSERS_PATH"])
+        log.warning("Chromium missing, downloading into %s",
+                    os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or default_browsers_dir())
         code, out = await _run("install", "chromium")
         if code == 0:
             done.append("Chromium скачан")
