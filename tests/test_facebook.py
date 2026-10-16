@@ -150,6 +150,11 @@ def test_bot_stops_fb_at_login_wall(tmp_path, monkeypatch):
     app = botmod.ScannerApp(settings, bot=botmod.make_bot("123456:TEST", session=session))
     monkeypatch.setattr(botmod, "in_quiet_hours", lambda now, cfg: False)
 
+    async def browser_ok(settings):
+        return []
+
+    monkeypatch.setattr(botmod, "ensure_chromium", browser_ok)
+
     class Wall(FakeFb):
         async def __aenter__(self):
             return self
@@ -217,3 +222,63 @@ def test_client_reads_cards_and_stops_at_login_wall(tmp_path, monkeypatch):
             await client.__aexit__(None, None, None)
 
     asyncio.run(scenario())
+
+
+# --- a session sent from a PC ------------------------------------------------------------------
+
+STATE = {"cookies": [
+    {"name": "c_user", "value": "1000123", "domain": ".facebook.com", "path": "/", "expires": 2000000000,
+     "httpOnly": False, "secure": True, "sameSite": "None"},
+    {"name": "xs", "value": "abc", "domain": ".facebook.com", "path": "/", "expires": 2000000000,
+     "httpOnly": True, "secure": True, "sameSite": "None"},
+], "origins": []}
+
+
+def test_valid_state():
+    assert fbmod.valid_state(STATE)
+    assert not fbmod.valid_state({"cookies": [{"name": "datr", "domain": ".facebook.com"}]})
+    assert not fbmod.valid_state([]) and not fbmod.valid_state({"cookies": "x"})
+
+
+def test_import_fb_state_from_telegram(tmp_path, monkeypatch):
+    import io
+    import json as _json
+
+    from scanner import bot as botmod
+
+    settings = Settings(_env_file=None, fb_enabled=True, fb_state_path=tmp_path / "data" / "fb_state.json")
+
+    class FakeBot:
+        def __init__(self, payload):
+            self.payload = payload
+
+        async def download(self, file_id):
+            return io.BytesIO(self.payload)
+
+    ok = asyncio.run(botmod.import_fb_state(FakeBot(_json.dumps(STATE).encode()), "f1", settings))
+    assert ok.startswith("✅") and _json.loads(settings.fb_state_path.read_text())["cookies"][0]["name"] == "c_user"
+    bad = asyncio.run(botmod.import_fb_state(FakeBot(b'{"cookies": []}'), "f2", settings))
+    assert "c_user" in bad
+    assert "не JSON" in asyncio.run(botmod.import_fb_state(FakeBot(b"\xff\xfe"), "f3", settings))
+
+
+@pytest.mark.skipif(not _browser_ok(), reason="playwright not installed")
+def test_client_imports_the_session_once(tmp_path):
+    import json as _json
+
+    state = tmp_path / "fb_state.json"
+    state.write_text(_json.dumps(STATE), encoding="utf-8")
+
+    async def scenario():
+        try:
+            client = fbmod.FacebookClient(CFG, tmp_path / "profile", headless=True, state_path=state)
+            await client.__aenter__()
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"Chromium not available: {exc}")
+        try:
+            assert await client.is_logged_in()
+        finally:
+            await client.__aexit__(None, None, None)
+
+    asyncio.run(scenario())
+    assert not state.exists() and (tmp_path / "fb_state.imported.json").exists()  # not imported again

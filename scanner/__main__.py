@@ -14,6 +14,7 @@ from rich.table import Table
 
 from scanner import learn
 from scanner.bot import ScannerApp, send_pending
+from scanner.browser_setup import use_browsers_dir
 from scanner.config import PROJECT_ROOT, Settings, load_config
 from scanner.db import Database
 from scanner.fb_worker import run_worker
@@ -29,12 +30,6 @@ log = logging.getLogger("scanner")
 console = Console()
 
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "fixtures"
-
-
-def make_client(settings: Settings, cfg, source: str, headless: bool | None = None):
-    if source == "fb":
-        return FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=headless)
-    return BazosClient(cfg.bazos)
 
 
 async def run_once(
@@ -294,19 +289,34 @@ async def save_fixtures(settings: Settings) -> None:
 
 
 async def fb_login(settings: Settings) -> None:
-    """A visible browser on Marketplace; you log in by hand, the session stays in fb_profile/."""
+    """A visible browser on Marketplace; you log in by hand. The session stays in the profile and is
+    also exported to fb_state.json, which you send to the bot when it runs on a server."""
     cfg = load_config(settings.config_path)
+    use_browsers_dir(settings)
     console.print(f"Opening Chromium with the profile {settings.fb_profile_dir}. Log in to Facebook "
                   "(2FA if asked); the window closes by itself once you are in. Nothing is typed for you.")
+    export = PROJECT_ROOT / "fb_state.json"
     async with FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=False) as fb:
         ok = await fb.login_interactively()
+        if ok:
+            await fb.export_state(export)
     if ok:
         db = Database(settings.db_path)
-        db.set_state("fb_blocked", "0")  # the bot may use FB again
+        db.set_state("fb_blocked", "0")  # the bot on this machine may use FB again
         db.close()
-        console.print("[green]Logged in, profile saved.[/] Check: python -m scanner run-once --source fb --dry")
+        console.print(f"[green]Logged in, profile saved.[/] Bot on a server: send [bold]{export}[/] to the bot "
+                      "in Telegram (it deletes the message after importing). It is your FB session: do not share it.")
+        console.print("Check here: python -m scanner run-once --source fb --dry")
     else:
         console.print("[yellow]No login detected (window closed or 10 min passed). Run fb-login again.[/]")
+
+
+def make_client(settings: Settings, cfg, source: str, headless: bool | None = None):
+    if source == "fb":
+        use_browsers_dir(settings)
+        return FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=headless,
+                              state_path=settings.fb_state_path)
+    return BazosClient(cfg.bazos)
 
 
 def main() -> None:

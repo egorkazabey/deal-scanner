@@ -14,6 +14,7 @@ list are dropped, FB mixes in the whole country.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
 import re
@@ -134,6 +135,14 @@ def parse_detail_text(url: str, text: str) -> ListingDetail:
     return ListingDetail(url=url, title=title, price=price, description=description, posted_date=None)
 
 
+def valid_state(data: dict) -> bool:
+    """A Playwright storage state with a logged-in Facebook session (the c_user cookie)."""
+    cookies = data.get("cookies") if isinstance(data, dict) else None
+    return isinstance(cookies, list) and any(
+        isinstance(c, dict) and c.get("name") == "c_user" and "facebook.com" in str(c.get("domain", ""))
+        for c in cookies)
+
+
 def login_required(url: str, has_login_form: bool) -> bool:
     return bool(_LOGIN_URL_RE.search(url)) or has_login_form
 
@@ -153,9 +162,10 @@ class FacebookClient:
 
     source = SOURCE
 
-    def __init__(self, cfg: AppConfig, profile_dir: Path, browser_path: str | None = None, headless: bool | None = None):
+    def __init__(self, cfg: AppConfig, profile_dir: Path, browser_path: str | None = None, headless: bool | None = None,
+                 state_path: Path | None = None):
         self.cfg, self.fb = cfg, cfg.facebook
-        self.profile_dir, self.browser_path = profile_dir, browser_path
+        self.profile_dir, self.browser_path, self.state_path = profile_dir, browser_path, state_path
         self.headless = self.fb.headless if headless is None else headless
         self._pw = self._ctx = self._page = None
         self._details = 0
@@ -173,8 +183,26 @@ class FacebookClient:
             viewport={"width": 1280, "height": 900},
         )
         self._ctx.set_default_timeout(self.fb.timeout * 1000)
+        await self._import_state()
         self._page = self._ctx.pages[0] if self._ctx.pages else await self._ctx.new_page()
         return self
+
+    async def _import_state(self) -> None:
+        """A session sent from a PC (fb-login there): its cookies go into this profile, once.
+
+        The file is renamed afterwards, so newer cookies FB sets in the profile are not overwritten
+        by the old file on the next start.
+        """
+        if not self.state_path or not self.state_path.exists():
+            return
+        cookies = json.loads(self.state_path.read_text(encoding="utf-8")).get("cookies", [])
+        await self._ctx.add_cookies(cookies)
+        self.state_path.replace(self.state_path.with_name(self.state_path.stem + ".imported.json"))
+        log.info("fb: imported %d cookies from %s", len(cookies), self.state_path.name)
+
+    async def export_state(self, path: Path) -> None:
+        """Save the logged-in session (cookies) to a file, to send it to the bot on a server."""
+        await self._ctx.storage_state(path=str(path))
 
     async def __aexit__(self, *exc) -> None:
         if self._ctx:

@@ -122,27 +122,35 @@ restricted. So the source is off by default, scans rarely (every ~25 min with ji
 hours), opens at most 10 detail pages per run and never works around a login wall, checkpoint or
 captcha: it stops and asks you to log in again. There are no passwords anywhere.
 
-Prefer a home PC: from a data-center IP Facebook asks for confirmations much more often.
+### On the server (with the hosted bot)
 
-```
-pip install -e ".[fb]"
-playwright install chromium                       # once
-python -m scanner fb-login                        # a browser opens: log in by hand, it closes by itself
-python -m scanner run-once --source fb --dry      # check what gets parsed
-```
+1. Set `FB_ENABLED=true` in the host's panel and redeploy. On the first FB run the bot sets up Chromium
+   by itself: it downloads it into `/app/data/ms-playwright` (persistent disk) and, if system libraries are
+   missing, installs them with apt (falls back to Debian's `chromium` package if the download is blocked).
+   It reports in Telegram what it did, or why it could not.
+2. On your PC (once, and again whenever Facebook logs you out):
+   ```
+   pip install -e .
+   python -m playwright install chromium
+   python -m scanner fb-login        # a browser opens: log in by hand, it closes by itself
+   ```
+   This writes `fb_state.json` (your Facebook session). Send that file to the bot in Telegram: the bot
+   imports it, deletes your message and continues. Treat the file like a password.
+3. Set the location in the Facebook account to Ústí nad Orlicí, 60 km. Listings from cities outside
+   `pricing.home_cities` / `near_cities` (+ `facebook.extra_cities`) are dropped, because Facebook mixes
+   in the whole country.
 
-Location and radius come from the Facebook account settings (set Ústí nad Orlicí, 60 km there).
-Listings from cities outside `pricing.home_cities` / `near_cities` (+ `facebook.extra_cities`) are dropped,
-because Facebook mixes in the whole country.
+From a data-center IP Facebook asks for confirmations more often. When it does, the bot stops FB, says so
+and waits for a new `fb_state.json`; Bazoš keeps running. `/status` shows the FB state, and Chromium
+needs a few hundred MB of RAM on the host.
 
-Two ways to run it:
-- **Hosted bot for Bazoš + `python -m scanner fb-worker` at home** (`FB_ENABLED` is not needed for the
-  worker). The worker only scans FB and sends alerts, without buttons: the hosted bot has its own database.
-- **Everything at home:** stop the hosted bot, set `FB_ENABLED=true` and run `python main.py`. FB alerts
-  then have buttons and `/status` shows the FB state.
+### On a home PC instead
 
-When Facebook wants a login, the bot says so; run `fb-login` on that PC and tap «🔁 Проверить FB»
-(the worker continues by itself).
+- **Hosted bot for Bazoš + `python -m scanner fb-worker` at home**: the worker only scans FB and sends
+  alerts, without buttons (the hosted bot has its own database).
+- **Everything at home**: stop the hosted bot, set `FB_ENABLED=true`, run `python main.py`.
+
+Check what gets parsed: `python -m scanner run-once --source fb --dry`.
 
 ## CLI
 

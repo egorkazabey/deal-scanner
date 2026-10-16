@@ -7,6 +7,7 @@ scanner/menu.py as plain functions, so they are testable without Telegram; this 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import ssl
@@ -27,6 +28,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from scanner import overrides
+from scanner.browser_setup import BrowserSetupError, ensure_chromium
 from scanner.config import AppConfig, NotifyConfig, Settings, load_config
 from scanner.db import Database, Status
 from scanner.gemini import PRAGUE
@@ -39,7 +41,7 @@ from scanner.notify import kc, split_messages
 from scanner.pipeline import run_scan
 from scanner.pricing import PriceList
 from scanner.sources.bazos import BazosClient
-from scanner.sources.facebook import FacebookClient, FbLoginRequired
+from scanner.sources.facebook import FacebookClient, FbLoginRequired, valid_state
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +88,22 @@ def _session() -> AiohttpSession:
 def make_bot(token: str, **kw) -> Bot:
     kw.setdefault("session", _session())
     return Bot(token, default=DefaultBotProperties(parse_mode=ParseMode.HTML, link_preview_is_disabled=True), **kw)
+
+
+async def import_fb_state(bot: Bot, file_id: str, settings: Settings) -> str:
+    """Save a session file sent by the owner (from fb-login on a PC); the next FB run imports it."""
+    buf = await bot.download(file_id)
+    try:
+        data = json.loads(buf.read().decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "Это не JSON. Нужен файл <code>fb_state.json</code>, который создаёт <code>fb-login</code>."
+    if not valid_state(data):
+        return "В файле нет входа в Facebook (cookie c_user). Запусти <code>fb-login</code> ещё раз."
+    settings.fb_state_path.parent.mkdir(parents=True, exist_ok=True)
+    settings.fb_state_path.write_text(json.dumps(data), encoding="utf-8")
+    if not settings.fb_enabled:
+        return "✅ Сессия сохранена, но Facebook выключен: задай FB_ENABLED=true на хостинге и передеплой."
+    return "✅ Сессия Facebook принята, файл удалён из чата. Проверяю FB в ближайшие минуты."
 
 
 async def _edit(q: CallbackQuery, screen: Screen) -> None:
@@ -209,7 +227,18 @@ class ScannerApp:
         async with self._fb_lock:
             self._fb_task = asyncio.current_task()
             try:
-                async with FacebookClient(cfg, self.settings.fb_profile_dir, self.settings.fb_browser_path) as fb:
+                try:
+                    if done := await ensure_chromium(self.settings):
+                        await self._notify("📘 Для Facebook: " + ", ".join(done))
+                except BrowserSetupError as exc:
+                    log.error("fb browser: %s", exc)
+                    if self.db.get_state("fb_setup_error") != str(exc):  # tell once per distinct problem
+                        self.db.set_state("fb_setup_error", str(exc))
+                        await self._notify(f"⚠️ Facebook: {escape(str(exc))}. FB пропущен, Bazoš работает.")
+                    return
+                self.db.set_state("fb_setup_error", "")
+                async with FacebookClient(cfg, self.settings.fb_profile_dir, self.settings.fb_browser_path,
+                                          state_path=self.settings.fb_state_path) as fb:
                     report = await run_scan(self.settings, cfg, self.db, fb)
                 log.info("fb run: %d listings, %d candidates, %d alerts", report.listings, report.candidates,
                          len(report.alerts))
@@ -218,8 +247,9 @@ class ScannerApp:
                 self.db.set_state("fb_blocked", "1")
                 await self._notify(
                     "⚠️ Facebook требует входа (стена входа / проверка / капча). FB-источник остановлен, "
-                    "ничего не обхожу.\nЗапусти на ПК с профилем: <code>python -m scanner fb-login</code>, "
-                    "потом нажми кнопку ниже.", InlineKeyboardMarkup(inline_keyboard=[[
+                    "ничего не обхожу.\nНа своём ПК: <code>python -m scanner fb-login</code>, войди руками, "
+                    "потом пришли сюда файл <code>fb_state.json</code>: подхвачу его и продолжу сам.",
+                    InlineKeyboardMarkup(inline_keyboard=[[
                         InlineKeyboardButton(text="🔁 Проверить FB", callback_data="a:fbretry")]]))
             except asyncio.CancelledError:
                 log.info("fb run cancelled: shutting down")
@@ -390,6 +420,22 @@ class ScannerApp:
         async def _price(m: Message, command: CommandObject) -> None:
             text, markup = cmd_price(self.settings, self.db, command.args)
             await m.answer(text, reply_markup=markup)
+
+        @r.message(F.document)
+        async def _document(m: Message) -> None:
+            name = m.document.file_name or ""
+            if not name.endswith(".json") or (m.document.file_size or 0) > 1_000_000:
+                await m.answer("Файлы я принимаю только один: <code>fb_state.json</code> из fb-login.")
+                return
+            text = await import_fb_state(self.bot, m.document.file_id, self.settings)
+            try:
+                await m.delete()  # the session file should not stay in the chat
+            except TelegramAPIError:
+                text += "\nУдали сообщение с файлом сам: это доступ к твоему FB."
+            if text.startswith("✅"):
+                self.db.set_state("fb_blocked", "0")
+                self._kick("fb")
+            await m.answer(text)
 
         @r.callback_query(F.data.startswith("m:"))
         async def _screen(q: CallbackQuery) -> None:

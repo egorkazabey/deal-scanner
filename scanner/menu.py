@@ -204,7 +204,9 @@ def fb_status_line(settings: Settings, cfg: AppConfig, db: Database) -> str:
     if not settings.fb_enabled:
         return "📘 Facebook: выключен (FB_ENABLED)"
     if db.get_state("fb_blocked") == "1":
-        return "📘 Facebook: ⚠️ ждёт входа, запусти fb-login и нажми «🔁 Проверить FB»"
+        return "📘 Facebook: ⚠️ ждёт входа: fb-login на ПК и пришли боту fb_state.json"
+    if error := db.get_state("fb_setup_error"):
+        return f"📘 Facebook: ⚠️ {escape(error[:200])}"
     runs = db.last_runs(1, source="fb")
     last = (f"последний прогон {_fmt_ts(runs[0]['started_at'])}, объявлений {runs[0]['listings']}"
             if runs and runs[0]["finished_at"] else "прогонов ещё не было")

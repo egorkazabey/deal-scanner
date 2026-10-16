@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     # Facebook Marketplace (off by default; see scanner/sources/facebook.py). No passwords anywhere:
     # `python -m scanner fb-login` opens a visible browser and you log in by hand into this profile.
     fb_enabled: bool = False
-    fb_profile_dir: Path = PROJECT_ROOT / "fb_profile"
+    fb_profile_dir: Path = PROJECT_ROOT / "data" / "fb_profile"  # on the host's persistent volume
+    # A session exported by `fb-login` on a PC and sent to the bot; imported into the profile once.
+    fb_state_path: Path = PROJECT_ROOT / "data" / "fb_state.json"
+    fb_browsers_dir: Path = PROJECT_ROOT / "data" / "ms-playwright"  # Chromium download (if not already set up)
+    fb_auto_install: bool = True  # download Chromium / install its system libraries when missing
     fb_browser_path: str | None = None  # Chromium executable when Playwright's own download is not wanted
     gemini_api_key: str | None = None
     # Explicit model ids only (no *-latest aliases): the free tier quota is per model.

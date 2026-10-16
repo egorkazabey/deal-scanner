@@ -10,4 +10,8 @@ __pycache__/
 data/*.db
 data/*.db-*
 fb_profile/
+data/fb_profile/
+data/ms-playwright/
+data/fb_state*.json
+fb_state.json
 logs/

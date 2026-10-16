@@ -13,12 +13,12 @@ dependencies = [
     "google-genai>=1.50",
     "aiogram>=3.13,<4",
     "apscheduler>=3.10,<4",
+    "playwright>=1.47",  # Facebook Marketplace; Chromium is downloaded on first use (scanner/browser_setup.py)
     "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-fb = ["playwright>=1.47"]  # Facebook Marketplace: pip install -e ".[fb]" && playwright install chromium
 
 [build-system]
 requires = ["setuptools>=69"]

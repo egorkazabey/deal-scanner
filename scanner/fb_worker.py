@@ -15,6 +15,7 @@ from datetime import datetime
 
 from aiogram.exceptions import TelegramAPIError
 
+from scanner.browser_setup import ensure_chromium
 from scanner.bot import _send, deliver, in_quiet_hours, make_bot
 from scanner.config import Settings, load_config
 from scanner.db import Database
@@ -45,7 +46,9 @@ async def run_worker(settings: Settings) -> None:
                 told_blocked = False
                 if not in_quiet_hours(datetime.now(PRAGUE), cfg.notify):
                     try:
-                        async with FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path) as fb:
+                        await ensure_chromium(settings)
+                        async with FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path,
+                                                  state_path=settings.fb_state_path) as fb:
                             report = await run_scan(settings, cfg, db, fb)
                         log.info("fb run: %d listings, %d candidates, %d alerts", report.listings,
                                  report.candidates, len(report.alerts))

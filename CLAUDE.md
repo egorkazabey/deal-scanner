@@ -25,13 +25,16 @@ Pipeline (built step by step, see PROMPTS.md):
 - `scanner/models.py`: `Listing`, `ListingDetail` (source-independent)
 - `scanner/sources/bazos.py`: URL builder, pure parsers (`parse_search_page`, `parse_detail`,
   `parse_price`), `BazosClient` (polite async httpx client: `scan()`, `fetch_detail()`)
-- `scanner/sources/facebook.py`: FB Marketplace on Playwright (optional extra `.[fb]`), off unless FB_ENABLED.
+- `scanner/sources/facebook.py`: FB Marketplace on Playwright, off unless FB_ENABLED.
   Pure parsers (`parse_card`, `parse_detail_text`, `parse_price`, `nearby` = only configured cities, FB mixes
   in the whole country) + `FacebookClient` (persistent profile `fb_profile/`, sequential, human pauses, at
   most `facebook.details_per_run` detail pages). A login wall / checkpoint / captcha raises `FbLoginRequired`:
   never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. Gone/sold checks are Bazoš only.
   `scanner/fb_worker.py` (`fb-worker`): FB only, no Telegram polling, alerts without buttons, for a home PC
-  next to the hosted bot (two pollers with one token conflict)
+  next to the hosted bot (two pollers with one token conflict). On a server: `scanner/browser_setup.py`
+  `ensure_chromium()` downloads Chromium into `data/ms-playwright` / installs its libraries (apt, root) /
+  falls back to Debian's chromium on first use; the login comes from `fb-login` on a PC, which exports
+  `fb_state.json`, sent to the bot as a document (`import_fb_state()`), imported into the profile once
 - `scanner/db.py`: SQLite `listings` (PK source+id, `status` new/alerted/hidden/contacted) and
   `price_history`; `Database.upsert()` returns NEW / PRICE_CHANGED / UNCHANGED
 - `scanner/pricing.py`: rule-based evaluation, no LLM. `normalize()` titles, `identify()` category +
