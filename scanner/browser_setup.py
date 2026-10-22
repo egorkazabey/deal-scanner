@@ -53,19 +53,27 @@ async def _probe(settings: Settings) -> str | None:
     """None if Chromium starts, else the error text."""
     from playwright.async_api import async_playwright
 
-    try:
+    async def launch() -> None:
         async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True, executable_path=settings.fb_browser_path)
+            browser = await pw.chromium.launch(headless=True, executable_path=settings.fb_browser_path,
+                                               timeout=60_000)
             await browser.close()
+
+    try:
+        await asyncio.wait_for(launch(), timeout=120)
         return None
+    except asyncio.TimeoutError:
+        return "Chromium не ответил за 2 минуты при запуске"
     except Exception as exc:  # noqa: BLE001 - any launch error is a setup problem
         return str(exc)
 
 
 async def _run(*args: str, timeout: float = 900) -> tuple[int, str]:
+    # No terminal on a server: apt must never wait for an answer (debconf prompts, "Do you want to continue?").
+    env = os.environ | {"DEBIAN_FRONTEND": "noninteractive"}
     proc = await asyncio.create_subprocess_exec(
-        sys.executable, "-m", "playwright", *args,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=os.environ.copy(),
+        sys.executable, "-m", "playwright", *args, stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env,
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout)
@@ -94,7 +102,7 @@ async def _apt_chromium(settings: Settings) -> bool:
         return False
     proc = await asyncio.create_subprocess_shell(
         "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends chromium",
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), 900)

@@ -170,6 +170,7 @@ class FacebookClient:
         self.headless = self.fb.headless if headless is None else headless
         self._pw = self._ctx = self._page = None
         self._details = 0
+        self.stage = "запуск браузера"  # what it is doing now, for the bot's timeout message
         self._lock = asyncio.Lock()  # one page at a time
 
     async def __aenter__(self) -> FacebookClient:
@@ -220,12 +221,14 @@ class FacebookClient:
         await asyncio.sleep(random.uniform(lo, hi))
 
     async def _open(self, url: str) -> None:
+        log.info("fb: open %s", url.split("?")[0])
         await self._page.goto(url, wait_until="domcontentloaded")
         await self._pause(1.5, 3.0)
         if login_required(self._page.url, await self._page.evaluate(_LOGIN_FORM_JS)):
             raise FbLoginRequired(f"FB requires a login ({self._page.url})")
 
     async def search(self, search: BazosSearch) -> list[Listing]:
+        self.stage = f"поиск «{search.name}»"
         async with self._lock:
             await self._open(search_url(search, self.fb))
             for _ in range(self.fb.scrolls):
@@ -258,12 +261,14 @@ class FacebookClient:
                     listing.first_seen = listing.last_seen = now
                     result.listings.append(listing)
         log.info("fb: %d listings nearby, %d dropped as too far / no city", len(result.listings), dropped)
+        self.stage = "оценка и Gemini"
         return result
 
     async def fetch_detail(self, url: str) -> ListingDetail:
         if self._details >= self.fb.details_per_run:
             raise FbDetailLimit(f"fb detail limit ({self.fb.details_per_run}) reached")
         self._details += 1
+        self.stage = f"страница объявления {url}"
         async with self._lock:
             await self._pause(3.0, 7.0)
             await self._open(url)

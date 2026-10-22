@@ -178,6 +178,8 @@ class ScannerApp:
         self._scan_task: asyncio.Task | None = None
         self._fb_lock = asyncio.Lock()
         self._fb_task: asyncio.Task | None = None
+        self._fb_client: FacebookClient | None = None
+        self._fb_stage = ""
         self.started_at = datetime.now()  # naive local, like the DB timestamps
         self.dp.include_router(self._router())
         self.dp.startup.register(self._on_startup)
@@ -226,22 +228,18 @@ class ScannerApp:
             return
         async with self._fb_lock:
             self._fb_task = asyncio.current_task()
+            self._fb_stage = "старт"
             try:
-                try:
-                    if done := await ensure_chromium(self.settings):
-                        await self._notify("📘 Для Facebook: " + ", ".join(done))
-                except BrowserSetupError as exc:
-                    log.error("fb browser: %s", exc)
-                    if self.db.get_state("fb_setup_error") != str(exc):  # tell once per distinct problem
-                        self.db.set_state("fb_setup_error", str(exc))
-                        await self._notify(f"⚠️ Facebook: {escape(str(exc))}. FB пропущен, Bazoš работает.")
-                    return
-                self.db.set_state("fb_setup_error", "")
-                async with FacebookClient(cfg, self.settings.fb_profile_dir, self.settings.fb_browser_path,
-                                          state_path=self.settings.fb_state_path) as fb:
-                    report = await run_scan(self.settings, cfg, self.db, fb)
-                log.info("fb run: %d listings, %d candidates, %d alerts", report.listings, report.candidates,
-                         len(report.alerts))
+                # A hung browser must not block FB forever (APScheduler then skips every next run).
+                await asyncio.wait_for(self._fb_run(cfg), timeout=cfg.facebook.run_timeout_min * 60)
+            except asyncio.TimeoutError:
+                stage = self._fb_client.stage if self._fb_client else self._fb_stage
+                log.error("fb run timed out after %d min at: %s", cfg.facebook.run_timeout_min, stage)
+                if self.db.get_state("fb_timeout_stage") != stage:  # tell once per stage
+                    self.db.set_state("fb_timeout_stage", stage)
+                    await self._notify(f"⚠️ FB-прогон завис на шаге «{escape(stage)}» и прерван через "
+                                       f"{cfg.facebook.run_timeout_min:g} мин. Следующий по расписанию. "
+                                       "Подробности: /logs")
             except FbLoginRequired as exc:
                 log.error("fb: %s", exc)
                 self.db.set_state("fb_blocked", "1")
@@ -254,10 +252,33 @@ class ScannerApp:
             except asyncio.CancelledError:
                 log.info("fb run cancelled: shutting down")
             except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
-                log.exception("fb scan failed")
+                log.exception("fb scan failed at: %s", self._fb_client.stage if self._fb_client else self._fb_stage)
             finally:
-                self._fb_task = None
+                self._fb_task = self._fb_client = None
         await deliver(self.bot, self.db, self.chat_id, quiet=False)
+
+    async def _fb_run(self, cfg: AppConfig) -> None:
+        self._fb_stage = "установка / проверка Chromium"
+        log.info("fb: checking Chromium")
+        try:
+            if done := await ensure_chromium(self.settings):
+                await self._notify("📘 Для Facebook: " + ", ".join(done))
+        except BrowserSetupError as exc:
+            log.error("fb browser: %s", exc)
+            if self.db.get_state("fb_setup_error") != str(exc):  # tell once per distinct problem
+                self.db.set_state("fb_setup_error", str(exc))
+                await self._notify(f"⚠️ Facebook: {escape(str(exc))}. FB пропущен, Bazoš работает.")
+            return
+        self.db.set_state("fb_setup_error", "")
+        self._fb_stage = "запуск браузера"
+        log.info("fb: starting the browser")
+        self._fb_client = FacebookClient(cfg, self.settings.fb_profile_dir, self.settings.fb_browser_path,
+                                         state_path=self.settings.fb_state_path)
+        async with self._fb_client as fb:
+            report = await run_scan(self.settings, cfg, self.db, fb)
+        self.db.set_state("fb_timeout_stage", "")
+        log.info("fb run: %d listings, %d candidates, %d alerts", report.listings, report.candidates,
+                 len(report.alerts))
 
     async def _on_startup(self) -> None:
         restored = overrides.replay(self.settings, self.db)  # Telegram edits survive a redeploy

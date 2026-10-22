@@ -38,6 +38,7 @@ facebook:
   search_pause: [4, 9]        # random pause between searches, seconds
   details_per_run: 10         # detail pages opened per run (candidates only)
   headless: true
+  run_timeout_min: 20         # a whole FB run is cut off after 20 min, the bot says at which step
   extra_cities: []
 
 pricing:

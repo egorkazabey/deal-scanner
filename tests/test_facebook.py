@@ -333,3 +333,43 @@ def test_fb_login_falls_back_from_chrome_to_chromium(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "FacebookClient", ClosedByOwner)
     asyncio.run(cli.fb_login(settings))
     assert opened == ["chrome"]
+
+
+def test_hung_fb_run_is_cut_off_and_the_next_one_runs(tmp_path, monkeypatch):
+    from scanner import bot as botmod
+    from test_bot import CHAT, FakeSession
+
+    for name in ("GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"):
+        monkeypatch.delenv(name, raising=False)
+    config = tmp_path / "config.yaml"
+    config.write_text((PROJECT_ROOT / "config.yaml").read_text(encoding="utf-8").replace(
+        "run_timeout_min: 20", "run_timeout_min: 0.005"), encoding="utf-8")  # 0.3 s
+    settings = Settings(_env_file=None, config_path=config, db_path=tmp_path / "t.db", log_dir=tmp_path / "logs",
+                        fb_enabled=True, telegram_bot_token="123456:TEST", telegram_chat_id=CHAT)
+    session = FakeSession()
+    app = botmod.ScannerApp(settings, bot=botmod.make_bot("123456:TEST", session=session))
+    monkeypatch.setattr(botmod, "in_quiet_hours", lambda now, cfg: False)
+
+    async def browser_ok(settings):
+        return []
+
+    monkeypatch.setattr(botmod, "ensure_chromium", browser_ok)
+
+    class Hung(FakeFb):
+        stage = "поиск «iphone»"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return None
+
+        async def scan(self):
+            await asyncio.sleep(3600)
+
+    monkeypatch.setattr(botmod, "FacebookClient", lambda *a, **kw: Hung([]))
+    asyncio.run(app.tick_fb())
+    msg = session.calls[-1].text
+    assert "FB-прогон завис на шаге «поиск «iphone»»" in msg and not app._fb_lock.locked()
+    asyncio.run(app.tick_fb())  # the next run starts again (and the same stage is not reported twice)
+    assert sum("завис" in getattr(c, "text", "") for c in session.calls) == 1
