@@ -1,12 +1,12 @@
 # Deal Scanner
 
 A personal scanner for underpriced used electronics (iPhone, Apple Watch, AirPods, iPad, MacBook, consoles,
-graphics cards, ready-built PCs) on Bazoš, within 60 km of Ústí nad Orlicí, Czechia. It finds listings
+graphics cards, ready-built PCs) on Bazoš and Sbazar, within 60 km of Ústí nad Orlicí, Czechia. It finds listings
 below market price, gets a second opinion from Gemini and sends them to Telegram with a ready-made
 message for the seller (in Czech).
 
 ```
-Bazoš → SQLite → rules (knowledge/prices.json) → Gemini → Telegram
+Bazoš, Sbazar (FB optional) → SQLite → rules (knowledge/prices.json) → Gemini → Telegram
 ```
 
 The bot's interface is in Russian; button and command names below are quoted as they appear in the bot.
@@ -115,6 +115,13 @@ the price list are listed at the end. Buttons «✅ Применить всё» 
 - After editing: `python -m scanner evaluate --all` re-evaluates the stored listings offline, `pytest`
   checks that everything is still recognized. Then commit, push to `main`, redeploy.
 
+## Sbazar
+
+Sbazar.cz runs the same searches as Bazoš, right after every Bazoš run (`sbazar:` in config.yaml).
+Sbazar counts the radius from the Ústí nad Orlicí district, so `radius_km: 30` covers about what Bazoš
+covers with 60 km. Bazoš category searches (graficka) have no Sbazar category: `sbazar.queries` maps them
+to a text query. `sbazar.enabled: false` switches it off; `/status` shows the last Sbazar run.
+
 ## Facebook Marketplace (optional)
 
 Facebook has no public Marketplace API and automating it is against its rules: the account may get
@@ -163,6 +170,7 @@ python -m scanner reviews --skipped     # what Gemini rejected, Gemini usage
 python -m scanner evaluate --all        # re-evaluate the database after a price list change
 python -m scanner price-report          # the price report (= /prices)
 python -m scanner fb-login              # log in to Facebook by hand (profile in fb_profile/)
+python -m scanner run-once --source sbazar --dry  # one Sbazar scan without sending
 python -m scanner run-once --source fb --dry  # one Facebook scan without sending
 python -m scanner fb-worker             # Facebook only, for a home PC next to the hosted bot
 python -m scanner save-fixtures         # refresh the test HTML when Bazoš changes its layout

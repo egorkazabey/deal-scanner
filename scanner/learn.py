@@ -74,10 +74,11 @@ async def check_sold(db: Database, client: Any, cfg: LearnConfig, now: datetime)
     rows = db.conn.execute(
         """SELECT o.source, o.listing_id, l.url FROM price_observations o
            JOIN listings l ON l.source = o.source AND l.id = o.listing_id
-           WHERE o.source = 'bazos' AND o.gone_at IS NULL AND o.last_seen < ? AND o.first_seen >= ?
+           WHERE o.source = ? AND o.gone_at IS NULL AND o.last_seen < ? AND o.first_seen >= ?
              AND (o.checked_at IS NULL OR o.checked_at < ?)
            GROUP BY o.source, o.listing_id ORDER BY MAX(o.last_seen) DESC LIMIT ?""",
-        (_ts(now - timedelta(days=cfg.unseen_days)), _ts(now - timedelta(days=cfg.give_up_days)),
+        (getattr(client, "source", "bazos"), _ts(now - timedelta(days=cfg.unseen_days)),
+         _ts(now - timedelta(days=cfg.give_up_days)),
          _ts(now - timedelta(days=cfg.recheck_days)), cfg.sold_checks_per_run),
     ).fetchall()
     sold = 0

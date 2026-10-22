@@ -4,7 +4,7 @@ Personal scanner for underpriced used electronics (iPhone, Apple Watch, AirPods,
 consoles, GPUs, gaming PCs) in Czechia, for resale. Region: Ústí nad Orlicí (PSČ 56201), 60 km radius.
 
 Pipeline (built step by step, see PROMPTS.md):
-`sources (Bazoš, later FB) → SQLite → pricing rules (prices.json) → Gemini second opinion → Telegram`
+`sources (Bazoš, Sbazar, FB) → SQLite → pricing rules (prices.json) → Gemini second opinion → Telegram`
 
 ## Rules
 - Code, identifiers, comments, commit messages: **English**.
@@ -25,11 +25,16 @@ Pipeline (built step by step, see PROMPTS.md):
 - `scanner/models.py`: `Listing`, `ListingDetail` (source-independent)
 - `scanner/sources/bazos.py`: URL builder, pure parsers (`parse_search_page`, `parse_detail`,
   `parse_price`), `BazosClient` (polite async httpx client: `scan()`, `fetch_detail()`)
+- `scanner/sources/sbazar.py`: Sbazar.cz over plain HTTP (`SbazarClient`, same interface and politeness
+  as BazosClient, errors are `SbazarError(BazosError)`). Search results = Astro island `SearchPageList`
+  props (`_decode()`), detail = ld+json Product, deleted = 404. Runs the Bazoš searches (`sbazar.queries`
+  for category searches) right after each Bazoš run in the same bot tick. `Accept: */*` on purpose
+  (text/html leads to the Seznam login/consent wall)
 - `scanner/sources/facebook.py`: FB Marketplace on Playwright, off unless FB_ENABLED.
   Pure parsers (`parse_card`, `parse_detail_text`, `parse_price`, `nearby` = only configured cities, FB mixes
   in the whole country) + `FacebookClient` (persistent profile `fb_profile/`, sequential, human pauses, at
   most `facebook.details_per_run` detail pages). A login wall / checkpoint / captcha raises `FbLoginRequired`:
-  never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. Gone/sold checks are Bazoš only.
+  never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. Gone/sold checks are Bazoš and Sbazar only (`pipeline.HTTP_SOURCES`).
   `scanner/fb_worker.py` (`fb-worker`): FB only, no Telegram polling, alerts without buttons, for a home PC
   next to the hosted bot (two pollers with one token conflict). On a server: `scanner/browser_setup.py`
   `ensure_chromium()` downloads Chromium into `data/ms-playwright` / installs its libraries (apt, root) /
@@ -104,6 +109,7 @@ python -m scanner evaluate --all        # re-evaluate DB listings offline (e.g. 
 python -m scanner save-fixtures         # refresh tests/fixtures from live Bazoš (when the layout changes)
 python -m scanner price-report          # price proposals from the collected observations (= /prices)
 python -m scanner fb-login              # visible browser, log in to FB by hand (profile in fb_profile/)
+python -m scanner run-once --source sbazar --dry  # one Sbazar scan
 python -m scanner run-once --source fb --dry  # one FB scan, print what was parsed
 python -m scanner fb-worker             # FB only on a home PC, next to the hosted bot
 pytest

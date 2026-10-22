@@ -94,6 +94,21 @@ class BazosConfig(BaseModel):
     searches: list[BazosSearch] = []
 
 
+class SbazarConfig(BaseModel):
+    """Sbazar.cz: the same searches as Bazoš, scanned right after each Bazoš run."""
+
+    enabled: bool = True
+    locality: str = "usti-nad-orlici"  # district seo name; the radius is counted from the district
+    radius_km: int = 30  # ~ Bazoš 60 km from PSČ 56201
+    pages: int = 1  # result pages per search (up to 58 listings each)
+    delay_min: float = 2.0
+    delay_max: float = 5.0
+    timeout: float = 20.0
+    retries: int = 3
+    queries: dict[str, str] = {}  # search name -> Sbazar text (Bazoš category searches have no query)
+    user_agent: str = BazosConfig.model_fields["user_agent"].default
+
+
 class MaxPriceTier(BaseModel):
     """Buy ceiling for one market price band: max = min(market * pct %, market - min_margin)."""
 
@@ -214,6 +229,7 @@ class LearnConfig(BaseModel):
 
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
+    sbazar: SbazarConfig = SbazarConfig()
     pricing: PricingConfig = PricingConfig()
     facebook: FacebookConfig = FacebookConfig()
     gemini: GeminiConfig = GeminiConfig()

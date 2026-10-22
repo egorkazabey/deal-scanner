@@ -88,6 +88,14 @@
   - Поиск по тексту находит и мусор (аксессуары, инструменты, где слово есть в описании); отсеивать будет pricing.
 - Запросы (рубрика mobil): iphone, apple watch, airpods, ipad. Запросы (рубрика pc): macbook, playstation, xbox, nintendo switch, herní pc, rtx, + категория graficka.
 
+### Sbazar
+- Сайт на Astro. Выдача лежит в атрибуте `props` тега `<astro-island>`, у которого component-url содержит `SearchPageList` (JSON, HTML-экранированный). Сериализация Astro: `[0, x]` = значение, `[1, [...]]` = массив, всё вложено так же; `props.offers` = `{pagination: {limit: 58, offset, total}, results: [...]}`.
+- Поля объявления: `id` (int), `name`, `price`, `priceByAgreement`, `seoName` (`235124844-apple-iphone-16-plus-...`), `createDate` (дата подачи, берём её), `sortingDate`/`editDate` (поднятие/правка), `topped`, `locality` {`municipality`, `district`, `zip`}. Описания в выдаче нет. Объявления с id-строкой и `locality` = null это реклама магазинов Zboží.cz, пропускаем.
+- Поиск: `https://www.sbazar.cz/hledej/{запрос}/0-vsechny-kategorie/usti-nad-orlici/cena-od-{min}-do-{max}-kc?radius=30`, страница 2: `.../cena-od-...-kc/nejnovejsi/2?radius=30`. Новые идут первыми (топ-объявления в начале). Радиус считается от района Ústí nad Orlicí: 30 км ≈ Bazoš 60 км от PSČ (Chrudim, Hradec Králové, Náchod, Olomouc, Pardubice, Rychnov, Svitavy, Šumperk, Trutnov, Žďár); 60 км уже Jihlava и Kolín.
+- Рубрики «graficka» на Sbazar нет, ищем текстом `graficka karta` (`sbazar.queries` в config.yaml).
+- Деталь: `https://www.sbazar.cz/inzerat/{seoName}`, в `<script type="application/ld+json">` объект `@type: Product` с `name`, `description` (HTML-сущности вроде `&quot;`), `offers.price`. Удалённое объявление отвечает 404.
+- Заголовок `Accept: text/html` уводит на автологин Seznam и стену согласия (cmp.seznam.cz). Шлём `Accept: */*` и редиректы за пределы sbazar.cz считаем ошибкой.
+
 ### Facebook Marketplace
 - Нужен залогиненный браузер (Playwright persistent profile). Без логина выдача пустая или со стеной входа.
 - Поиск: `https://www.facebook.com/marketplace/search?query=Q&minPrice=..&maxPrice=..&daysSinceListed=1&exact=false`. FB перенаправляет на `/marketplace/<locationId>/search/...`; локация и радиус (60 км) берутся из настроек аккаунта.

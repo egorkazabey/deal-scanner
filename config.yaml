@@ -26,6 +26,17 @@ bazos:
     - {name: rtx,             section: pc,    query: "rtx",             price_min: 1800, price_max: 25000}
     - {name: graficka,        section: pc,    category: "graficka",     price_min: 1800, price_max: 25000}
 
+sbazar:
+  # Sbazar.cz, same searches as bazos (above), scanned right after each Bazoš run
+  enabled: true
+  locality: usti-nad-orlici   # district; Sbazar counts the radius from the district
+  radius_km: 30               # ~ what Bazoš covers with 60 km from 56201
+  pages: 1                    # result pages per search (58 listings each, newest first)
+  delay_min: 2.0
+  delay_max: 5.0
+  queries:                    # search name -> text for Sbazar (Bazoš category searches have no query)
+    graficka: "graficka karta"
+
 facebook:
   # FB Marketplace, off by default (FB_ENABLED=true in .env). Log in once by hand: python -m scanner fb-login.
   # Same searches as Bazoš; location and radius come from the FB account settings. Listings from cities

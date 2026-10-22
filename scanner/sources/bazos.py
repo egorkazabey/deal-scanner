@@ -156,6 +156,8 @@ class ScanResult:
 class BazosClient:
     """Sequential, polite HTTP client. Use as `async with BazosClient(cfg) as client:`."""
 
+    source = SOURCE
+
     def __init__(self, cfg: BazosConfig):
         self.cfg = cfg
         self._http = httpx.AsyncClient(

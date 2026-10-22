@@ -190,6 +190,7 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
         f"📍 Bazoš: {cfg.bazos.radius_km} км · {len(cfg.bazos.searches)} поисков · каждые {cfg.notify.interval_min} мин"
         f" · тихие часы {cfg.notify.quiet_start}-{cfg.notify.quiet_end}",
     ]
+    lines.append(sbazar_status_line(cfg, db))
     lines.append(fb_status_line(settings, cfg, db))
     reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, PriceList([]), db)
     if reviewer.disabled_reason:
@@ -198,6 +199,18 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
         lines.append(f"🤖 {model}: {u['requests']} запросов, осталось {u['left']} из {settings.gemini_rpd}"
                      + (f", ошибок {u['errors']}" if u["errors"] else ""))
     return "\n".join(lines)
+
+
+def sbazar_status_line(cfg: AppConfig, db: Database) -> str:
+    if not cfg.sbazar.enabled:
+        return "🟢 Sbazar: выключен (sbazar.enabled)"
+    runs = db.last_runs(1, source="sbazar")
+    if not runs or not runs[0]["finished_at"]:
+        return f"🟢 Sbazar: {cfg.sbazar.radius_km} км от района, сразу после Bazoš · прогонов ещё не было"
+    r = runs[0]
+    line = (f"🟢 Sbazar: {cfg.sbazar.radius_km} км от района · {_fmt_ts(r['started_at'])}: объявлений "
+            f"{r['listings']}, новых {r['new']}, кандидатов {r['candidates']}")
+    return line + (" · ❗ " + escape(r["errors"][:300]) if r["errors"] else "")
 
 
 def fb_status_line(settings: Settings, cfg: AppConfig, db: Database) -> str:

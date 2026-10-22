@@ -25,6 +25,7 @@ from scanner.pipeline import PcResult, run_scan
 from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
 from scanner.sources.facebook import FacebookClient
+from scanner.sources.sbazar import SbazarClient
 
 log = logging.getLogger("scanner")
 console = Console()
@@ -338,6 +339,8 @@ def make_client(settings: Settings, cfg, source: str, headless: bool | None = No
         use_browsers_dir(settings)
         return FacebookClient(cfg, settings.fb_profile_dir, settings.fb_browser_path, headless=headless,
                               state_path=settings.fb_state_path)
+    if source == "sbazar":
+        return SbazarClient(cfg.sbazar, cfg.bazos.searches)
     return BazosClient(cfg.bazos)
 
 
@@ -348,8 +351,8 @@ def main() -> None:
 
     p_run = sub.add_parser("run-once", help="run all searches once")
     p_run.add_argument("--dry", action="store_true", help="no notifications, only print to console")
-    p_run.add_argument("--source", choices=["bazos", "fb"], default="bazos",
-                       help="fb: Facebook Marketplace (log in first with fb-login)")
+    p_run.add_argument("--source", choices=["bazos", "sbazar", "fb"], default="bazos",
+                       help="sbazar: Sbazar.cz; fb: Facebook Marketplace (log in first with fb-login)")
     sub.add_parser("fb-login", help="open a visible browser and log in to Facebook by hand (saved in fb_profile/)")
     sub.add_parser("fb-worker", help="Facebook only, no Telegram polling: for a home PC next to the hosted bot")
     p_run.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")

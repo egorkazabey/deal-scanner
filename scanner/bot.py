@@ -41,6 +41,7 @@ from scanner.notify import kc, split_messages
 from scanner.pipeline import run_scan
 from scanner.pricing import PriceList
 from scanner.sources.bazos import BazosClient
+from scanner.sources.sbazar import SbazarClient
 from scanner.sources.facebook import FacebookClient, FbLoginRequired, valid_state
 
 log = logging.getLogger(__name__)
@@ -210,13 +211,18 @@ class ScannerApp:
         if quiet and self._last_scan and now - self._last_scan < timedelta(minutes=cfg.notify.quiet_interval_min - 1):
             return
         self._last_scan = now
-        try:
-            async with BazosClient(cfg.bazos) as client:
-                report = await run_scan(self.settings, cfg, self.db, client, quiet=quiet)
-            log.info("run: %d listings, %d candidates, %d alerts", report.listings, report.candidates,
-                     len(report.alerts))
-        except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
-            log.exception("scan failed")
+        clients = [lambda: BazosClient(cfg.bazos)] if cfg.bazos.enabled else []
+        if cfg.sbazar.enabled:
+            clients.append(lambda: SbazarClient(cfg.sbazar, cfg.bazos.searches))
+        for make in clients:  # one source after the other, never in parallel
+            client = make()
+            try:
+                async with client:
+                    report = await run_scan(self.settings, cfg, self.db, client, quiet=quiet)
+                log.info("run %s: %d listings, %d candidates, %d alerts", client.source, report.listings,
+                         report.candidates, len(report.alerts))
+            except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
+                log.exception("scan %s failed", getattr(client, "source", "?"))
         await deliver(self.bot, self.db, self.chat_id, quiet)
 
     async def tick_fb(self) -> None:

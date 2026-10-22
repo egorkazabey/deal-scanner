@@ -29,6 +29,8 @@ from scanner.pc import Components, PcSpecs, PcValuation, is_pc_build, pc_match, 
 from scanner.pricing import Evaluation, PriceList, evaluate, evaluate_many, normalize, rank
 from scanner.sources.bazos import BazosError
 
+HTTP_SOURCES = {"bazos", "sbazar"}  # sources whose detail pages answer 404/410 once a listing is deleted
+
 log = logging.getLogger(__name__)
 
 
@@ -181,8 +183,9 @@ async def _scan(
     await _pc_alerts(settings, cfg, db, client, evaluations, prices, today, quiet, dry, ai, started, report,
                      drops, reviewer_factory)
 
-    if not dry and getattr(client, "source", "bazos") == "bazos":  # detail checks over plain HTTP: Bazoš only
-        await _gone_alerts(db, cfg, client, started, quiet, report)
+    source = getattr(client, "source", "bazos")
+    if not dry and source in HTTP_SOURCES:  # detail checks over plain HTTP: not FB
+        await _gone_alerts(db, cfg, client, source, started, quiet, report)
         await learn.check_sold(db, client, cfg.learn, started)
 
 
@@ -295,11 +298,11 @@ def _watch_alerts(
 
 
 async def _gone_alerts(
-    db: Database, cfg: AppConfig, client: Any, started: datetime, quiet: bool, report: RunReport,
+    db: Database, cfg: AppConfig, client: Any, source: str, started: datetime, quiet: bool, report: RunReport,
 ) -> None:
     rows = db.to_check_gone(
         seen_before=started, checked_before=started - timedelta(minutes=cfg.notify.gone_check_every_min),
-        limit=cfg.notify.gone_checks_per_run,
+        limit=cfg.notify.gone_checks_per_run, source=source,
     )
     for row in rows:
         try:

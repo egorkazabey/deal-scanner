@@ -11,7 +11,7 @@ from scanner.models import Listing
 from scanner.pc import PcSpecs, PcValuation, breakdown_lines
 from scanner.pricing import Evaluation
 
-SOURCE_NAMES = {"bazos": "Bazoš", "fb": "FB"}
+SOURCE_NAMES = {"bazos": "Bazoš", "sbazar": "Sbazar", "fb": "FB"}
 VERDICT_EMOJI = {"buy": "🟢", "negotiate": "🟡", "skip": "🔴"}
 NO_AI_EMOJI = "⚪"
 TELEGRAM_LIMIT = 4096
