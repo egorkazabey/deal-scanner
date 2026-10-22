@@ -308,7 +308,7 @@ def test_fb_login_falls_back_from_chrome_to_chromium(tmp_path, monkeypatch):
         async def export_state(self, path):
             path.write_text('{"cookies": []}', encoding="utf-8")
 
-    async def chromium_ok(settings):
+    async def chromium_ok(settings, show=False):
         return []
 
     monkeypatch.setattr(cli, "FacebookClient", FakeClient)
