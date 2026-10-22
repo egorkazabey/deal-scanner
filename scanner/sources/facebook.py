@@ -235,6 +235,7 @@ class FacebookClient:
                 await self._page.mouse.wheel(0, random.randint(1800, 2600))
                 await self._pause(self.fb.scroll_pause, self.fb.scroll_pause + 1.0)
             cards = await self._page.evaluate(_CARDS_JS)
+            log.info("fb: %r: %d item links on %s", search.name, len(cards), self._page.url.split("?")[0])
         return parse_cards(cards, date.today())
 
     async def scan(self) -> ScanResult:

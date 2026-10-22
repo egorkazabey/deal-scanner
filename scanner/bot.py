@@ -406,6 +406,9 @@ class ScannerApp:
             await show(m, screen("prices"))
 
         @r.message(Command("logs"))
+        async def _logs_cmd(m: Message, command: CommandObject) -> None:
+            await show(m, screen("fblogs" if (command.args or "").strip().lower() == "fb" else "logs"))
+
         @r.message(F.text == BTN_LOGS)
         async def _logs(m: Message) -> None:
             await show(m, screen("logs"))

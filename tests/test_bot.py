@@ -292,7 +292,7 @@ def _all_callbacks(markup):
     return [b.callback_data for row in markup.inline_keyboard for b in row] if markup else []
 
 
-@pytest.mark.parametrize("name", ["home", "status", "top", "skipped", "logs", "settings", "tiers", "radius",
+@pytest.mark.parametrize("name", ["home", "status", "top", "skipped", "logs", "fblogs", "settings", "tiers", "radius",
                                   "searches", "prices", "unknown"])
 def test_every_screen_renders(files, name):
     settings, _, _ = files
@@ -370,3 +370,19 @@ def test_deliver_without_buttons_for_the_fb_worker():
     session = FakeSession()
     run(deliver(make_bot("123456:TEST", session=session), db, CHAT, quiet=False, buttons=False))
     assert session.calls[0].text == "fb alert" and session.calls[0].reply_markup is None
+
+
+def test_fb_log_shows_only_facebook_lines(files):
+    from scanner.menu import cmd_fb_logs
+
+    settings, _, _ = files
+    assert "FB-прогонов в логе ещё нет" in cmd_fb_logs(settings)
+    settings.log_dir.mkdir(parents=True, exist_ok=True)
+    (settings.log_dir / "scanner.log").write_text(
+        "2026-10-22 12:45:01 INFO scanner.bot: fb: checking Chromium\n"
+        "2026-10-22 12:45:02 INFO scanner.pipeline: run: 300 listings\n"
+        "2026-10-22 12:45:09 INFO scanner.sources.facebook: fb: open https://www.facebook.com/marketplace/search\n"
+        "2026-10-22 12:47:30 INFO scanner.sources.facebook: fb: 0 listings nearby, 25 dropped as too far / no city\n",
+        encoding="utf-8")
+    out = cmd_fb_logs(settings)
+    assert "checking Chromium" in out and "25 dropped" in out and "300 listings" not in out

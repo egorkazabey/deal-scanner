@@ -74,7 +74,7 @@ HELP = """\
 /skipped · что Gemini отбраковал и почему
 /settings · потолок покупки, радиус, поиски, отчёт по ценам
 /prices · отчёт по ценам сейчас (сам приходит по воскресеньям)
-/logs · последние ошибки
+/logs · последние ошибки; /logs fb · что делал Facebook
 /pause, /resume · остановить и продолжить
 /price iphone 15 128 9500 · поправить market_price
 /search add mobil galaxy s24 3000 20000 · добавить поиск
@@ -337,8 +337,23 @@ def cmd_logs(settings: Settings, lines: int = 30) -> str:
     return f"<b>📜 Последние ошибки и предупреждения</b>\n<pre>{escape(text)}</pre>"
 
 
+def cmd_fb_logs(settings: Settings, lines: int = 40) -> str:
+    """What the last FB runs did (INFO lines of scanner.log): pages opened, listings found and dropped."""
+    rows = [r for r in tail(settings.log_dir / "scanner.log", 3000)
+            if " scanner.sources.facebook:" in r or " scanner.browser_setup:" in r
+            or ("scanner.bot:" in r and " fb" in r)][-lines:]
+    if not rows:
+        return "<b>📘 Лог Facebook</b>\nFB-прогонов в логе ещё нет"
+    text = "\n".join(r.split(" ", 2)[-1] if r[:4].isdigit() else r for r in rows)[-3500:]
+    return f"<b>📘 Лог Facebook</b>\n<pre>{escape(text)}</pre>"
+
+
 def screen_logs(settings: Settings) -> Screen:
-    return cmd_logs(settings), _kb([_btn("🔄 Обновить", "m:logs"), HOME])
+    return cmd_logs(settings), _kb([_btn("🔄 Обновить", "m:logs"), _btn("📘 Лог FB", "m:fblogs")], [HOME])
+
+
+def screen_fb_logs(settings: Settings) -> Screen:
+    return cmd_fb_logs(settings), _kb([_btn("🔄 Обновить", "m:fblogs"), _btn("📜 Ошибки", "m:logs")], [HOME])
 
 
 # --- settings -----------------------------------------------------------------------------------
@@ -535,6 +550,8 @@ def render(name: str, args: list[str], settings: Settings, db: Database, next_ru
         return screen_skipped(db)
     if name == "logs":
         return screen_logs(settings)
+    if name == "fblogs":
+        return screen_fb_logs(settings)
     if name == "settings":
         return screen_settings(cfg)
     if name == "tiers":
