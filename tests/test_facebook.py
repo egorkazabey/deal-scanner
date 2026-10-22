@@ -194,7 +194,9 @@ def _browser_ok() -> bool:
 
 
 @pytest.mark.skipif(not _browser_ok(), reason="playwright not installed (pip install -e '.[fb]')")
-def test_client_reads_cards_and_stops_at_login_wall(tmp_path, monkeypatch):
+def test_client_reads_cards_and_stops_at_login_wall(tmp_path, monkeypatch, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="scanner.sources.facebook")
     pages = {"search": (FIXTURES / "fb_search.html").as_uri(), "login": (FIXTURES / "fb_login.html").as_uri(),
              "item": (FIXTURES / "fb_item.html").as_uri()}
     monkeypatch.setattr(fbmod, "search_url", lambda search, cfg: pages["search"])
@@ -214,6 +216,8 @@ def test_client_reads_cards_and_stops_at_login_wall(tmp_path, monkeypatch):
             result = await client.scan()
             assert [(l.id, l.price, l.location) for l in result.listings] == [
                 ("111", 12500, "Pardubice"), ("333", 6900, "Ústí nad Orlicí")]  # Praha dropped, dup removed
+            assert "fb: dropped cities: Praha x1" in caplog.text
+            assert "fb: sample card (Praha): 7 000 CZK | iPhone 15 128GB | Praha" in caplog.text
             detail = await client.fetch_detail(pages["item"])
             assert detail.price == 7000 and detail.description.startswith("Prodám iPhone 15")
             with pytest.raises(FbLoginRequired):

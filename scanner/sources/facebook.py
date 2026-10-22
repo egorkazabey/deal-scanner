@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import Counter
 import logging
 import random
 import re
@@ -170,6 +171,7 @@ class FacebookClient:
         self.headless = self.fb.headless if headless is None else headless
         self._pw = self._ctx = self._page = None
         self._details = 0
+        self._raw: dict[str, str] = {}
         self.stage = "запуск браузера"  # what it is doing now, for the bot's timeout message
         self._lock = asyncio.Lock()  # one page at a time
 
@@ -222,7 +224,14 @@ class FacebookClient:
 
     async def _open(self, url: str) -> None:
         log.info("fb: open %s", url.split("?")[0])
-        await self._page.goto(url, wait_until="domcontentloaded")
+        try:
+            await self._page.goto(url, wait_until="domcontentloaded")
+        except Exception as exc:  # noqa: BLE001 - FB is sometimes slow: one more try after a pause
+            if "Timeout" not in str(exc):
+                raise
+            log.warning("fb: %s timed out, one more try", url.split("?")[0])
+            await self._pause(5, 10)
+            await self._page.goto(url, wait_until="domcontentloaded")
         await self._pause(1.5, 3.0)
         if login_required(self._page.url, await self._page.evaluate(_LOGIN_FORM_JS)):
             raise FbLoginRequired(f"FB requires a login ({self._page.url})")
@@ -236,12 +245,16 @@ class FacebookClient:
                 await self._pause(self.fb.scroll_pause, self.fb.scroll_pause + 1.0)
             cards = await self._page.evaluate(_CARDS_JS)
             log.info("fb: %r: %d item links on %s", search.name, len(cards), self._page.url.split("?")[0])
+        for c in cards:  # raw card texts, to explain dropped listings in the log
+            if m := _ITEM_RE.search(c.get("href", "")):
+                self._raw[m.group(1)] = c.get("text", "")
         return parse_cards(cards, date.today())
 
     async def scan(self) -> ScanResult:
         """All searches (the Bazoš ones), sequential, human pauses; FbLoginRequired propagates."""
         result, seen = ScanResult(), set()
-        cities, dropped = allowed_cities(self.cfg), 0
+        cities, dropped, dropped_cities = allowed_cities(self.cfg), 0, Counter()
+        samples: dict[str | None, str] = {}
         now = datetime.now()
         for i, search in enumerate(self.cfg.bazos.searches):
             if i:
@@ -256,12 +269,21 @@ class FacebookClient:
                 continue
             near = nearby(found, cities)
             dropped += len(found) - len(near)
+            kept = {l.id for l in near}
+            for l in found:
+                if l.id not in kept:
+                    dropped_cities[l.location] += 1
+                    samples.setdefault(l.location, self._raw.get(l.id, ""))
             for listing in near:
                 if listing.id not in seen:
                     seen.add(listing.id)
                     listing.first_seen = listing.last_seen = now
                     result.listings.append(listing)
         log.info("fb: %d listings nearby, %d dropped as too far / no city", len(result.listings), dropped)
+        if dropped_cities:
+            log.info("fb: dropped cities: %s", ", ".join(f"{c or '(no city)'} x{n}" for c, n in dropped_cities.most_common(15)))
+            for city in list(samples)[:3]:
+                log.info("fb: sample card (%s): %s", city or "no city", " | ".join(samples[city].splitlines())[:200])
         self.stage = "оценка и Gemini"
         return result
 

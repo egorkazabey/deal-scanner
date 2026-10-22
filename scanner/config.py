@@ -113,7 +113,7 @@ class FacebookConfig(BaseModel):
     search_pause: tuple[float, float] = (4.0, 9.0)  # random pause between searches, seconds
     details_per_run: int = 10  # detail pages opened per run, at most (candidates only)
     headless: bool = True
-    timeout: float = 30.0  # seconds per page
+    timeout: float = 60.0  # seconds per page (FB is slow from a server)
     run_timeout_min: float = 20  # a whole FB run is cut off after this (a hung browser would block FB forever)
     extra_cities: list[str] = []  # besides pricing.home_cities / near_cities: FB mixes in the whole country
 
