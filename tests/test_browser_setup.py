@@ -20,7 +20,7 @@ def _fake(monkeypatch, probes, runs=(), apt=False):
     async def probe(settings):
         return probes.pop(0)
 
-    async def run(*args, timeout=900):
+    async def run(*args, timeout=900, show=False):
         calls.append(args)
         return runs.pop(0)
 

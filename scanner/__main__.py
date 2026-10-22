@@ -293,7 +293,8 @@ async def fb_login(settings: Settings) -> None:
     also exported to fb_state.json, which you send to the bot when it runs on a server."""
     cfg = load_config(settings.config_path)
     try:
-        if done := await ensure_chromium(settings):  # downloads Chromium if this PC has none yet
+        # Downloads Chromium (~150 MB, a few minutes) if this PC has none yet; the progress bar is shown.
+        if done := await ensure_chromium(settings, show=True):
             console.print("; ".join(done))
     except BrowserSetupError as exc:
         console.print(f"[red]{exc}[/]\nTry: python -m playwright install chromium")

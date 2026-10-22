@@ -68,19 +68,20 @@ async def _probe(settings: Settings) -> str | None:
         return str(exc)
 
 
-async def _run(*args: str, timeout: float = 900) -> tuple[int, str]:
+async def _run(*args: str, timeout: float = 900, show: bool = False) -> tuple[int, str]:
+    """`python -m playwright <args>`; show=True lets its progress bar go to the terminal (fb-login)."""
     # No terminal on a server: apt must never wait for an answer (debconf prompts, "Do you want to continue?").
     env = os.environ | {"DEBIAN_FRONTEND": "noninteractive"}
     proc = await asyncio.create_subprocess_exec(
         sys.executable, "-m", "playwright", *args, stdin=asyncio.subprocess.DEVNULL,
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env,
+        stdout=None if show else asyncio.subprocess.PIPE, stderr=None if show else asyncio.subprocess.STDOUT, env=env,
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout)
     except asyncio.TimeoutError:
         proc.kill()
         return 1, "timeout"
-    return proc.returncode or 0, out.decode(errors="replace")[-1500:]
+    return proc.returncode or 0, (out or b"").decode(errors="replace")[-1500:]
 
 
 _APT_CHROMIUM = ("/usr/bin/chromium", "/usr/bin/chromium-browser")
@@ -117,7 +118,7 @@ async def _apt_chromium(settings: Settings) -> bool:
     return True
 
 
-async def ensure_chromium(settings: Settings) -> list[str]:
+async def ensure_chromium(settings: Settings, show: bool = False) -> list[str]:
     """Make sure Chromium starts; returns what was done (for the log / Telegram)."""
     global _ready
     if _ready:
@@ -128,7 +129,7 @@ async def ensure_chromium(settings: Settings) -> list[str]:
     if error and settings.fb_auto_install and "Executable doesn't exist" in error:
         log.warning("Chromium missing, downloading into %s",
                     os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or default_browsers_dir())
-        code, out = await _run("install", "chromium")
+        code, out = await _run("install", "chromium", show=show)
         if code == 0:
             done.append("Chromium скачан")
             error = await _probe(settings)
