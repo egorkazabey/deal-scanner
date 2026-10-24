@@ -94,8 +94,13 @@ async def review_db(
             for e in picked:
                 db.delete_review(e.listing.source, e.listing.id)
         reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db)
-        async with BazosClient(cfg.bazos) as client:
-            reviews = await review_candidates(picked, reviewer, db, prices, cfg.pricing, client.fetch_detail)
+        async with BazosClient(cfg.bazos) as bazos, SbazarClient(cfg.sbazar, cfg.bazos.searches) as sbazar:
+            async def fetch_detail(url: str):  # each listing from its own site
+                if "facebook.com" in url:
+                    raise RuntimeError("FB detail pages only from the bot / fb-worker")
+                return await (sbazar if "sbazar.cz" in url else bazos).fetch_detail(url)
+
+            reviews = await review_candidates(picked, reviewer, db, prices, cfg.pricing, fetch_detail)
         _print_reviews(reviews, reviewer, as_json)
     finally:
         db.close()

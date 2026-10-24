@@ -310,6 +310,10 @@ class Database:
             sql, args = sql + " WHERE last_seen >= ?", (seen_since.isoformat(timespec="seconds"),)
         return [_row_to_listing(r) for r in self.conn.execute(sql, args).fetchall()]
 
+    def listing(self, source: str, listing_id: str) -> Listing | None:
+        row = self.get(source, listing_id)
+        return _row_to_listing(row) if row else None
+
     def price_history(self, source: str, listing_id: str) -> list[sqlite3.Row]:
         return self.conn.execute(
             "SELECT price, seen_at FROM price_history WHERE source = ? AND listing_id = ? ORDER BY id",
@@ -462,8 +466,12 @@ class Database:
         return (old, new, datetime.fromisoformat(rows[0]["seen_at"])) if new < old else None
 
     def was_alerted(self, source: str, listing_id: str, price: int | None) -> bool:
+        """Alerted at this price or a lower one: a price that went up is no news."""
+        if price is None:
+            sql = "SELECT 1 FROM alerts WHERE source = ? AND listing_id = ? AND price IS NULL AND kind != 'gone'"
+            return self.conn.execute(sql, (source, listing_id)).fetchone() is not None
         return self.conn.execute(
-            "SELECT 1 FROM alerts WHERE source = ? AND listing_id = ? AND price IS ? AND kind != 'gone'",
+            "SELECT 1 FROM alerts WHERE source = ? AND listing_id = ? AND price <= ? AND kind != 'gone'",
             (source, listing_id, price),
         ).fetchone() is not None
 

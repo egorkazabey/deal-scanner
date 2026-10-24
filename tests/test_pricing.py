@@ -411,6 +411,10 @@ def test_rank_only_candidates_sorted(prices):
         ("PlayStation Camera PS4", True),
         ("Dock Nintendo Switch", True),
         ("FIFA 24 hra PS5", True),
+        ("XBox 360 Kinect", True),
+        ("Unrailed - Nintendo Switch - Super Rare Games", True),
+        ("Xbox 360 + Kinect + 5 her", False),
+        ("Nintendo Switch OLED + games", False),
         ("Ovladač PS4 DualShock", True),
         ("Gamepad Xbox One", False),  # priced item "Геймпад Xbox"
         ("DualSense ovladač PS5 bílý", False),  # priced item

@@ -653,9 +653,10 @@ def stop_reasons(text: str) -> list[str]:
 _FOREIGN_RE = re.compile(r"\b(?:volant\w*|wheel|pedal\w*|hori|logitech|thrustmaster|headset\w*)\b")
 # Accessory if mentioned before the device (or with no device): "Sluchátka k iPhone", "Nabíječka iPhone".
 _LEADING_ACC_RE = re.compile(r"\bsluchat\w*|\bkamer\w*|\bcamera\b|\bwebcam\w*|\bnabijec\w*")
-# Accessory if the title has no sign of a console in it: "Dock Nintendo Switch", "FIFA 24 hra PS5".
+# Accessory if the title has no sign of a console in it: "Dock Nintendo Switch", "FIFA 24 hra PS5",
+# "XBox 360 Kinect", "Unrailed - Nintendo Switch - Super Rare Games".
 # "dockem/docku" (with/in a dock) mean the dock comes with the console, so only bare "dock" counts.
-_CONSOLE_ACC_RE = re.compile(r"\bdock\b|\b(?:hra|hry|hru|her)\b|\bkamer\w*|\bcamera\b")
+_CONSOLE_ACC_RE = re.compile(r"\bdock\b|\b(?:hra|hry|hru|her|games?)\b|\bkamer\w*|\bcamera\b|\bkinect\b")
 _PRICED_CONTROLLERS = {"dualsense", "xbox controller", "switch controller"}
 
 

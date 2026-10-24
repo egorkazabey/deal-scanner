@@ -32,6 +32,7 @@ from scanner.db import Database
 from scanner.models import Listing, ListingDetail
 from scanner.pc import PC_SYSTEM_PROMPT, PcSpecs
 from scanner.pricing import Evaluation, PriceList, evaluate, max_buy_price, max_price_rule_lines, offer_price
+from scanner.sources.bazos import BazosError
 
 log = logging.getLogger(__name__)
 
@@ -307,6 +308,20 @@ def rematch(ev: Evaluation, v: Verdict, prices: PriceList, pricing: PricingConfi
     return new
 
 
+_SHARED_LIMITERS: dict[tuple[str, int, int], RateLimiter] = {}
+
+
+def _limiter(model: str, settings: Settings, sleep: Callable[[float], Awaitable[None]]) -> RateLimiter:
+    """One limiter per model for the whole process: a run makes several reviewers (deals, PCs) and Bazoš
+    and Sbazar run back to back, so private limiters would together go over the RPM limit."""
+    if sleep is not asyncio.sleep:  # tests with a fake sleep get their own
+        return RateLimiter(settings.gemini_rpm, settings.gemini_tpm, sleep=sleep)
+    key = (model, settings.gemini_rpm, settings.gemini_tpm)
+    if key not in _SHARED_LIMITERS:
+        _SHARED_LIMITERS[key] = RateLimiter(settings.gemini_rpm, settings.gemini_tpm)
+    return _SHARED_LIMITERS[key]
+
+
 class GeminiReviewer:
     def __init__(
         self,
@@ -323,7 +338,7 @@ class GeminiReviewer:
         self.settings, self.cfg, self.pricing, self.prices, self.db = settings, cfg, pricing, prices, db
         self.models = [m for m in (settings.gemini_model, settings.gemini_fallback_model) if m]
         self._sleep, self._now = sleep, now
-        self._limiters = {m: RateLimiter(settings.gemini_rpm, settings.gemini_tpm, sleep=sleep) for m in self.models}
+        self._limiters = {m: _limiter(m, settings, sleep) for m in self.models}
         self._client = client
         self._system: str | None = None
         self.disabled_reason: str | None = None
@@ -550,6 +565,11 @@ async def review_candidates(
         if listing.description is None and not cached:
             try:
                 detail = await fetch_detail(listing.url)
+            except BazosError as exc:
+                if exc.status in (404, 410):  # deleted since the search: no alert for it
+                    reviews.append(Review(ev, rules_skip=f"объявление удалено (HTTP {exc.status})"))
+                    continue
+                log.warning("detail %s failed: %s", listing.url, exc)
             except Exception as exc:  # noqa: BLE001 - one broken detail page must not stop the run
                 log.warning("detail %s failed: %s", listing.url, exc)
             else:

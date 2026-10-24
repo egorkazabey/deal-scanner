@@ -62,7 +62,7 @@ Pipeline (built step by step, see PROMPTS.md):
   counted in `GEMINI_QUOTA_TZ` (Pacific Time, resets ~09:00 Prague). Other options: `gemini:` in config.yaml
 - `scanner/pipeline.py`: one scan (`run_scan()`): Bazoš → DB → rules → Gemini → rows in `alerts`.
   Telegram gets only listings posted ≤ `notify.max_age_days` ago or with a price drop in the last
-  `notify.price_drop_days`; stale ones never (only /top). Also watch alerts ("🔁", drop ≥ 5 %) and
+  `notify.price_drop_days`; stale ones never (only /top); a price above one already alerted is no news. Also watch alerts ("🔁", drop ≥ 5 %) and
   "gone" for contacted listings (detail page 404/410). Options: `notify:` in config.yaml
 - `scanner/pc.py`: ready-built PCs. `is_pc_build()` (title), `PcSpecs` (Gemini response schema: hardware only,
   Gemini does not price), `value_pc()` = used part prices from `knowledge/components.json` (GPU from
@@ -71,7 +71,7 @@ Pipeline (built step by step, see PROMPTS.md):
   then `evaluate(..., match=pc_match())` applies the usual ceiling, offer and score
 - `scanner/notify.py`: message texts (HTML), digest splitting
 - `scanner/bot.py`: aiogram 3 bot + APScheduler in one process (`ScannerApp`): scan every 10 min +
-  jitter, quiet hours (scan every 30 min, alerts → morning digest), delivery, handler wiring.
+  jitter, quiet hours (scan every 30 min, alerts → morning digest), delivery (one at a time: `_deliver_lock`), handler wiring.
   Answers only TELEGRAM_CHAT_ID. `make_bot()` trusts SSL_CERT_FILE
 - `scanner/menu.py`: what the bot shows. Bottom reply keyboard (`MAIN_KEYBOARD`), "/" command list
   (`BOT_COMMANDS`), inline screens edited in place: `render("<screen>")` for callbacks `m:<screen>:<args>`

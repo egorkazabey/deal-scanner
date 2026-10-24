@@ -4,7 +4,7 @@ Delivery is separate (`scanner.bot`): alerts are created here with sent_at = NUL
 away, or collected into the morning digest when created in quiet hours.
 
 What becomes an alert:
-- deal: a candidate posted in the last `notify.max_age_days` days, not alerted at this price yet;
+- deal: a candidate posted in the last `notify.max_age_days` days, not alerted at this price or a lower one;
 - drop: a candidate whose price fell in the last `notify.price_drop_days` days (any age but stale);
 - watch: a listing with "🔁 Снизится — сообщи" whose price fell >= `notify.watch_drop_pct` %;
 - gone: a "✍️ Написал" listing whose detail page answers 404/410.
@@ -81,7 +81,7 @@ def notify_kind(
     if drop and now - drop[2] <= timedelta(days=cfg.notify.price_drop_days):
         return "drop"
     posted = listing.posted_date or (listing.first_seen.date() if listing.first_seen else None)
-    if posted and (now.date() - posted).days <= cfg.notify.max_age_days:
+    if posted and (now.astimezone(PRAGUE).date() - posted).days <= cfg.notify.max_age_days:
         return "deal"
     return None
 
@@ -121,14 +121,18 @@ async def _scan(
     reviewer_factory: Callable[..., GeminiReviewer],
 ) -> None:
     prices = PriceList.load(cfg.pricing.prices_path)
-    today = started.astimezone(PRAGUE).date() if started.tzinfo else started.date()
+    today = started.astimezone(PRAGUE).date()  # a naive time is the host's local time (UTC on the host)
     result = await client.scan()
     report.listings, report.errors = len(result.listings), list(result.errors)
 
     drops: dict[tuple[str, str], int] = {}
     for listing in result.listings:
-        upsert = db.upsert(listing, started)
         key = (listing.source, listing.id)
+        if listing.source == "fb" and (row := db.get(*key)) and row["posted_date"]:
+            # FB cards have no date (searched with daysSinceListed=1): keep the day it was first seen,
+            # or the listing would look new on every run and never become stale.
+            listing.posted_date = date.fromisoformat(row["posted_date"])
+        upsert = db.upsert(listing, started)
         if upsert.kind is UpsertKind.NEW:
             report.new += 1
             report.labels[key] = "NEW"

@@ -213,3 +213,35 @@ def test_split_messages_respects_limit():
     parts = split_messages("H", ["x" * 30] * 10, limit=100)
     assert all(len(p) <= 100 for p in parts) and parts[0].startswith("H\n")
     assert sum(p.count("x" * 30) for p in parts) == 10
+
+
+def test_price_increase_is_not_alerted_again():
+    db = Database(":memory:")
+    scan(db, [listing(price=7000)])
+    report, _ = scan(db, [listing(price=7500)], at=START + timedelta(minutes=10))
+    assert report.candidates == 1 and report.alerts == []  # still fresh, but dearer than what was sent
+    report, _ = scan(db, [listing(price=6500)], at=START + timedelta(minutes=20))
+    assert [db.conn.execute("SELECT kind FROM alerts WHERE id = ?", (i,)).fetchone()[0] for i in report.alerts] \
+        == ["drop"]
+
+
+class DeletedDetail(FakeBazos):
+    async def fetch_detail(self, url):
+        raise BazosError(f"GET {url} -> HTTP 410", 410)
+
+
+def test_listing_deleted_before_its_detail_gets_no_alert():
+    db = Database(":memory:")
+    client = DeletedDetail([listing(description=None)])
+    report = asyncio.run(run_scan(SETTINGS, AppConfig(), db, client, now=lambda: START, reviewer_factory=no_ai))
+    assert report.alerts == [] and report.reviews[0].rules_skip == "объявление удалено (HTTP 410)"
+
+
+def test_fb_listing_keeps_the_day_it_was_first_seen():
+    db = Database(":memory:")
+    fb = listing(source="fb", id="9", url="https://www.facebook.com/marketplace/item/9/", posted_date=TODAY)
+    scan(db, [fb])
+    later = TODAY + timedelta(days=20)  # FB cards always say "today"
+    report, _ = scan(db, [replace(fb, posted_date=later)], at=START + timedelta(days=20))
+    assert db.get("fb", "9")["posted_date"] == TODAY.isoformat()
+    assert "stale" in report.evaluations[0].flags

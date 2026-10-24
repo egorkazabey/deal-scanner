@@ -72,3 +72,12 @@ def test_migration_adds_rematched_column(tmp_path):
     db = Database(path)
     db.save_review("bazos", "1", 100, "m", "{}", "buy", "low", True, rematched="a → b")
     assert db.get_review("bazos", "1", 100)["rematched"] == "a → b"
+
+
+def test_was_alerted_at_this_or_lower_price():
+    db = Database(":memory:")
+    db.upsert(make_listing(10000))
+    db.add_alert("bazos", "123", 10000, "deal", "t", "s")
+    assert db.was_alerted("bazos", "123", 10000) and db.was_alerted("bazos", "123", 10500)
+    assert not db.was_alerted("bazos", "123", 9500)
+    assert db.listing("bazos", "123").price == 10000 and db.listing("bazos", "nope") is None

@@ -247,7 +247,7 @@ def top_items(cfg: AppConfig, db: Database, now: datetime | None = None, limit: 
     prices = PriceList.load(cfg.pricing.prices_path)
     listings = db.listings(seen_since=now - timedelta(hours=24))
     hidden = {(l.source, l.id) for l in listings if (row := db.get(l.source, l.id)) and row["status"] == Status.HIDDEN}
-    today = now.date()
+    today = now.astimezone(PRAGUE).date()
     evaluations = evaluate_many(listings, prices, cfg.pricing, today)
     pcs = [r.evaluation for r in cached_pc_results(evaluations, db, prices, cfg, today) if not r.skipped]
     ranked = [e for e in sorted(rank(evaluations) + pcs, key=lambda e: e.score, reverse=True)
@@ -264,7 +264,7 @@ def _review_emoji(db: Database, source: str, listing_id: str, price: int | None)
 def cmd_top(cfg: AppConfig, db: Database, now: datetime | None = None, items: TopItems | None = None) -> str:
     now = now or datetime.now()
     items = items or top_items(cfg, db, now)
-    today = now.date()
+    today = now.astimezone(PRAGUE).date()
 
     def line(i: int, e: Evaluation) -> str:
         l = e.listing
@@ -300,10 +300,10 @@ def card_text(cfg: AppConfig, db: Database, source: str, listing_id: str, now: d
     ).fetchone()
     if row:
         return row["text"]
-    listing = next((l for l in db.listings() if l.source == source and l.id == listing_id), None)
+    listing = db.listing(source, listing_id)
     if listing is None:
         return None
-    today = (now or datetime.now()).date()
+    today = (now or datetime.now()).astimezone(PRAGUE).date()
     prices = PriceList.load(cfg.pricing.prices_path)
     ev = evaluate(listing, prices, cfg.pricing, today)
     if ev.match is None and (spec_row := db.get_pc_specs(source, listing_id)):

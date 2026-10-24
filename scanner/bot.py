@@ -181,6 +181,7 @@ class ScannerApp:
         self._fb_task: asyncio.Task | None = None
         self._fb_client: FacebookClient | None = None
         self._fb_stage = ""
+        self._deliver_lock = asyncio.Lock()  # the Bazoš and FB ticks both deliver: never at the same time
         self.started_at = datetime.now()  # naive local, like the DB timestamps
         self.dp.include_router(self._router())
         self.dp.startup.register(self._on_startup)
@@ -223,7 +224,7 @@ class ScannerApp:
                          report.candidates, len(report.alerts))
             except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
                 log.exception("scan %s failed", getattr(client, "source", "?"))
-        await deliver(self.bot, self.db, self.chat_id, quiet)
+        await self.deliver(quiet)
 
     async def tick_fb(self) -> None:
         """Facebook Marketplace run: rare, never in quiet hours, stops at a login wall until fb-login."""
@@ -261,7 +262,12 @@ class ScannerApp:
                 log.exception("fb scan failed at: %s", self._fb_client.stage if self._fb_client else self._fb_stage)
             finally:
                 self._fb_task = self._fb_client = None
-        await deliver(self.bot, self.db, self.chat_id, quiet=False)
+        await self.deliver(quiet=False)
+
+    async def deliver(self, quiet: bool) -> int:
+        # Two deliveries at once would both read the same pending alerts and send them twice.
+        async with self._deliver_lock:
+            return await deliver(self.bot, self.db, self.chat_id, quiet)
 
     async def _fb_run(self, cfg: AppConfig) -> None:
         self._fb_stage = "установка / проверка Chromium"

@@ -386,3 +386,24 @@ def test_fb_log_shows_only_facebook_lines(files):
         encoding="utf-8")
     out = cmd_fb_logs(settings)
     assert "checking Chromium" in out and "25 dropped" in out and "300 listings" not in out
+
+
+class SlowSession(FakeSession):
+    async def make_request(self, bot, method, timeout=None):
+        await asyncio.sleep(0.01)  # a real send takes a while: the other delivery runs meanwhile
+        return await super().make_request(bot, method, timeout)
+
+
+def test_two_deliveries_at_once_send_each_alert_once(files):
+    settings, _, _ = files
+    session = SlowSession()
+    app = ScannerApp(settings, bot=make_bot("123456:TEST", session=session))
+    app.db.add_alert("bazos", "1", 7000, "deal", "one", "s1")
+    app.db.add_alert("bazos", "2", 8000, "deal", "two", "s2")
+
+    async def both():  # the Bazoš tick and the FB tick finishing together
+        return await asyncio.gather(app.deliver(quiet=False), app.deliver(quiet=False))
+
+    assert sorted(run(both())) == [0, 2]
+    assert [c.text for c in session.calls] == ["one", "two"]
+    app.db.close()
