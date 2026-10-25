@@ -238,11 +238,20 @@ def test_own_rpd_limit_uses_fallback_without_asking_main_model():
 def test_server_errors_give_no_ai_review():
     db = Database(":memory:")
     err = errors.ServerError(503, {"error": {"code": 503, "message": "overloaded", "status": "UNAVAILABLE"}})
-    reviewer, client, sleeps = make_reviewer(db, [err] * 3, retries=2)
+    reviewer, client, sleeps = make_reviewer(db, [err] * 6, retries=2)
     review = run(reviewer.review(candidate()))
     assert review.verdict is None and review.notify and "503" in review.no_ai_reason
-    assert len(client.calls) == 3 and len(sleeps.calls) == 2
+    assert client.calls == ["gemini-3.5-flash-lite"] * 3 + ["gemini-3.1-flash-lite"] * 3  # both models tried
     assert reviewer.usage()["gemini-3.5-flash-lite"]["errors"] == 3
+
+
+def test_overloaded_main_model_falls_back():
+    db = Database(":memory:")
+    err = errors.ServerError(503, {"error": {"code": 503, "message": "high demand", "status": "UNAVAILABLE"}})
+    reviewer, client, _ = make_reviewer(db, [err, err, response(verdict())], retries=1)
+    review = run(reviewer.review(candidate()))
+    assert review.model == "gemini-3.1-flash-lite" and review.verdict
+    assert reviewer.usage()["gemini-3.5-flash-lite"]["left"] > 0  # not marked as out of quota
 
 
 def test_no_api_key_means_no_ai():

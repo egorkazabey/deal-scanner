@@ -131,6 +131,11 @@ class FacebookConfig(BaseModel):
     timeout: float = 60.0  # seconds per page (FB is slow from a server)
     run_timeout_min: float = 20  # a whole FB run is cut off after this (a hung browser would block FB forever)
     extra_cities: list[str] = []  # besides pricing.home_cities / near_cities: FB mixes in the whole country
+    # Search area in the URL (/marketplace/<location>/search?...&radius=N), so it does not depend on the
+    # account setting or on where the server is (a US host lands in "sanfrancisco"). The location is the
+    # part after /marketplace/ when you open Marketplace near Ústí nad Orlicí in a browser. "" = FB default.
+    location: str = ""
+    radius_km: int = 60
 
 
 class PricingConfig(BaseModel):

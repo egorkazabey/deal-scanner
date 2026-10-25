@@ -74,6 +74,10 @@ def test_search_url_uses_bazos_searches():
     assert "minPrice=2000" in url and "maxPrice=45000" in url
     assert "query=graficka" in search_url(graficka, CFG.facebook)  # a category search uses its name
 
+    pinned = search_url(iphone, CFG.facebook.model_copy(update={"location": "112233", "radius_km": 60}))
+    assert pinned.startswith("https://www.facebook.com/marketplace/112233/search?query=iphone")
+    assert "radius=60" in pinned
+
 
 def test_parse_detail_text():
     text = ("iPhone 15 128GB černý\n7 000 CZK\nОпубликовано 3 часа назад в Pardubice\n"

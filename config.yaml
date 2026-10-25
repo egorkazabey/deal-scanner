@@ -51,6 +51,9 @@ facebook:
   headless: true
   run_timeout_min: 20         # a whole FB run is cut off after 20 min, the bot says at which step
   extra_cities: []
+  location: ""                # FB search area: the part after /marketplace/ in your browser's Marketplace URL
+                              # near Ústí nad Orlicí (a city name or a number); "" = the account's setting
+  radius_km: 60
 
 pricing:
   # Buy ceiling (max_price) by market price band, rounded down to 100:

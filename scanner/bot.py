@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import ssl
-from datetime import datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from html import escape
 
 from aiogram import Bot, Dispatcher, F, Router
@@ -58,6 +58,17 @@ def in_quiet_hours(now: datetime, cfg: NotifyConfig) -> bool:
     """`now` in Prague time; the window may cross midnight."""
     start, end, t = _hm(cfg.quiet_start), _hm(cfg.quiet_end), now.astimezone(PRAGUE).time()
     return start <= t < end if start <= end else t >= start or t < end
+
+
+def quiet_wait(now: datetime, last_scan: datetime | None, cfg: NotifyConfig) -> bool:
+    """In quiet hours: True while the last scan was less than quiet_interval_min ago.
+
+    Both times must be UTC (or any fixed offset): two Prague times subtract as wall clocks, so on the
+    night the clocks go back the difference is negative for an hour and every scan was skipped.
+    """
+    if last_scan is None or not in_quiet_hours(now, cfg):
+        return False
+    return now - last_scan < timedelta(minutes=cfg.quiet_interval_min - 1)
 
 
 def health_problem(
@@ -207,9 +218,9 @@ class ScannerApp:
         if self.db.get_state("paused") == "1":
             return
         cfg = self.cfg()
-        now = datetime.now(PRAGUE)
+        now = datetime.now(UTC)
         quiet = in_quiet_hours(now, cfg.notify)
-        if quiet and self._last_scan and now - self._last_scan < timedelta(minutes=cfg.notify.quiet_interval_min - 1):
+        if quiet_wait(now, self._last_scan, cfg.notify):
             return
         self._last_scan = now
         clients = [lambda: BazosClient(cfg.bazos)] if cfg.bazos.enabled else []

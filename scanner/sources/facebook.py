@@ -62,6 +62,9 @@ def search_url(search: BazosSearch, cfg: FacebookConfig) -> str:
         params["minPrice"] = search.price_min
     if search.price_max:
         params["maxPrice"] = search.price_max
+    if cfg.location:
+        params["radius"] = cfg.radius_km
+        return f"{BASE}/marketplace/{cfg.location}/search?{urlencode(params)}"
     return f"{BASE}/marketplace/search?{urlencode(params)}"
 
 

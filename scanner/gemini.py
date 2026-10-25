@@ -382,9 +382,9 @@ class GeminiReviewer:
             }
         return out
 
-    def available_model(self) -> str | None:
+    def available_model(self, exclude: set[str] = frozenset()) -> str | None:
         usage = self.usage()
-        return next((m for m in self.models if usage[m]["left"] > 0), None)
+        return next((m for m in self.models if usage[m]["left"] > 0 and m not in exclude), None)
 
     async def review(self, ev: Evaluation) -> Review:
         listing = ev.listing
@@ -429,15 +429,21 @@ class GeminiReviewer:
         return await self._ask_prompt(build_prompt(ev, self.pricing, today), Verdict, self.system_instruction)
 
     async def _ask_prompt(self, prompt: str, schema: type[BaseModel], system: str) -> tuple[str, Any]:
-        while model := self.available_model():
+        failed: set[str] = set()  # 503 "high demand" is per model: the fallback model often still answers
+        error: GeminiUnavailable | None = None
+        while model := self.available_model(exclude=failed):
             try:
                 return model, await self._call(model, prompt, schema, system)
             except DailyQuotaExceeded:
                 log.warning("Gemini %s: daily quota exceeded, switching model", model)
                 self.db.mark_gemini_exhausted(self.day(), model)
             except GeminiUnavailable as exc:
-                log.warning("Gemini unavailable (%s), candidate goes out without AI", exc)
-                raise NoAI(f"Gemini недоступен: {exc}") from exc
+                log.warning("Gemini %s unavailable (%s), trying the next model", model, exc)
+                failed.add(model)
+                error = exc
+        if error is not None:
+            log.warning("Gemini: no model answered, candidate goes out without AI")
+            raise NoAI(f"Gemini недоступен: {error}") from error
         raise NoAI("дневной лимит Gemini исчерпан")
 
     async def extract_pc(self, listing: Listing) -> PcSpecs:

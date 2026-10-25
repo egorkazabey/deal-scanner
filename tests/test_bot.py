@@ -14,7 +14,7 @@ from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from rich.console import Console
 
 from scanner import config_edit
-from scanner.bot import ScannerApp, deliver, health_problem, in_quiet_hours, make_bot
+from scanner.bot import ScannerApp, deliver, health_problem, in_quiet_hours, make_bot, quiet_wait
 from scanner.menu import (
     act, cmd_logs, cmd_pct, cmd_price, cmd_radius, cmd_search, cmd_skipped, cmd_status, cmd_top, code_version, render,
 )
@@ -407,3 +407,17 @@ def test_two_deliveries_at_once_send_each_alert_once(files):
     assert sorted(run(both())) == [0, 2]
     assert [c.text for c in session.calls] == ["one", "two"]
     app.db.close()
+
+
+def test_quiet_scans_go_on_through_the_dst_night():
+    """25.10.2026 the clocks go back 03:00 CEST -> 02:00 CET, inside the quiet hours."""
+    from datetime import UTC
+    cfg = NotifyConfig()
+    last = datetime(2026, 10, 25, 0, 40, tzinfo=UTC)  # 02:40 CEST
+    assert quiet_wait(last + timedelta(minutes=10), last, cfg)  # 10 min later: wait
+    assert not quiet_wait(last + timedelta(minutes=30), last, cfg)  # 02:10 CET, 30 real minutes: scan
+    assert not quiet_wait(last + timedelta(minutes=60), last, cfg)
+    # The old code compared Prague times: 02:10 CET - 02:40 CEST = -30 min, so it kept waiting.
+    p = last.astimezone(PRAGUE)
+    assert (last + timedelta(minutes=30)).astimezone(PRAGUE) - p < timedelta(0)
+    assert not quiet_wait(datetime(2026, 10, 25, 12, 0, tzinfo=UTC), last, cfg)  # daytime: never waits

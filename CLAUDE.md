@@ -34,7 +34,8 @@ Pipeline (built step by step, see PROMPTS.md):
   Pure parsers (`parse_card`, `parse_detail_text`, `parse_price`, `nearby` = only configured cities, FB mixes
   in the whole country) + `FacebookClient` (persistent profile `fb_profile/`, sequential, human pauses, at
   most `facebook.details_per_run` detail pages). A login wall / checkpoint / captcha raises `FbLoginRequired`:
-  never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. Gone/sold checks are Bazoš and Sbazar only (`pipeline.HTTP_SOURCES`).
+  never bypass it; the bot sets `fb_blocked`, asks for `fb-login` and waits. `facebook.location` + `radius_km` pin the
+  search area in the URL (else FB uses the account setting / the server's IP: a US host lands in "sanfrancisco"). Gone/sold checks are Bazoš and Sbazar only (`pipeline.HTTP_SOURCES`).
   `scanner/fb_worker.py` (`fb-worker`): FB only, no Telegram polling, alerts without buttons, for a home PC
   next to the hosted bot (two pollers with one token conflict). On a server: `scanner/browser_setup.py`
   `ensure_chromium()` downloads Chromium into `data/ms-playwright` / installs its libraries (apt, root) /
