@@ -191,6 +191,7 @@ def cmd_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datet
         f" · тихие часы {cfg.notify.quiet_start}-{cfg.notify.quiet_end}",
     ]
     lines.append(sbazar_status_line(cfg, db))
+    lines.append(vinted_status_line(cfg, db))
     lines.append(fb_status_line(settings, cfg, db))
     reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, PriceList([]), db)
     if reviewer.disabled_reason:
@@ -213,6 +214,20 @@ def sbazar_status_line(cfg: AppConfig, db: Database) -> str:
     return line + (" · ❗ " + escape(r["errors"][:300]) if r["errors"] else "")
 
 
+def vinted_status_line(cfg: AppConfig, db: Database) -> str:
+    if not cfg.vinted.enabled:
+        return "👕 Vinted: выключен (vinted.enabled)"
+    if db.get_state("vinted_blocked") == "1":
+        return "👕 Vinted: ⚠️ остановлен: антибот-проверка, жду кнопку «Проверить Vinted»"
+    runs = db.last_runs(1, source="vinted")
+    if not runs or not runs[0]["finished_at"]:
+        return f"👕 Vinted: вся ČR + заграница, каждые {cfg.vinted.interval_min} мин · прогонов ещё не было"
+    r = runs[0]
+    line = (f"👕 Vinted: каждые {cfg.vinted.interval_min} мин · {_fmt_ts(r['started_at'])}: объявлений "
+            f"{r['listings']}, новых {r['new']}, кандидатов {r['candidates']}")
+    return line + (" · ❗ " + escape(r["errors"][:300]) if r["errors"] else "")
+
+
 def fb_status_line(settings: Settings, cfg: AppConfig, db: Database) -> str:
     if not settings.fb_enabled:
         return "📘 Facebook: выключен (FB_ENABLED)"
@@ -228,6 +243,8 @@ def fb_status_line(settings: Settings, cfg: AppConfig, db: Database) -> str:
 
 def screen_status(settings: Settings, cfg: AppConfig, db: Database, next_run: datetime | None = None) -> Screen:
     fb_row = [_btn("🔁 Проверить FB", "a:fbretry")] if settings.fb_enabled and db.get_state("fb_blocked") == "1" else []
+    if db.get_state("vinted_blocked") == "1":
+        fb_row.append(_btn("🔁 Проверить Vinted", "a:vintedretry"))
     return cmd_status(settings, cfg, db, next_run), _kb(
         [_btn("🔄 Обновить", "m:status"), _pause_button(db, "status")], fb_row, [HOME])
 
@@ -593,6 +610,9 @@ def act(action: str, args: list[str], settings: Settings, db: Database) -> tuple
         if action == "fbretry":
             db.set_state("fb_blocked", "0")
             return "Проверяю FB в ближайшие секунды", "status", []
+        if action == "vintedretry":
+            db.set_state("vinted_blocked", "0")
+            return "Проверяю Vinted в ближайшие секунды", "status", []
         if action == "ptoggle" and len(args) == 2:
             learn.toggle(db, int(args[0]), int(args[1]))
             return "", "pselect", [args[0]]

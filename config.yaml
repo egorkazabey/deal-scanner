@@ -37,6 +37,34 @@ sbazar:
   queries:                    # search name -> text for Sbazar (Bazoš category searches have no query)
     graficka: "graficka karta"
 
+vinted:
+  # Vinted.cz, same searches as bazos (above), at most every interval_min, in the Bazoš tick after Sbazar.
+  # No radius: Vinted ships across ČR and mixes in foreign sellers (PL/SK/HU, ~90 % of the results).
+  # A listing costs price + buyer protection (Vinted gives it, 5 % + 18 Kč) + shipping below.
+  enabled: true
+  interval_min: 20
+  pages: 2                    # result pages per search (96 listings each, newest first)
+  delay_min: 2.0
+  delay_max: 5.0
+  shipping_czk: 79            # Czech seller -> pickup point (Zásilkovna / Balíkovna)
+  shipping_abroad_czk: 160    # foreign seller, international shipping (estimate, check on a real order)
+  foreign: true               # false = Czech sellers only
+  catalogs:                   # search name -> Vinted categories, so "iphone" does not bring phone cases
+    iphone: [3661]            # mobile phones
+    apple watch: [3035]       # smart watches
+    airpods: [3678]           # headphones
+    ipad: [3728]              # tablets
+    macbook: [3580]           # laptops
+    playstation: [3025]       # consoles
+    xbox: [3025]
+    nintendo switch: [3025]
+    herní pc: [3581]          # desktop computers
+    rtx: [3602]               # graphics cards
+    graficka: [3602]
+  queries:                    # search name -> text for Vinted (Bazoš category searches have no query)
+    graficka: "radeon"         # NVIDIA cards come from the rtx search
+    herní pc: "pc"
+
 facebook:
   # FB Marketplace, off by default (FB_ENABLED=true in .env). Log in once by hand: python -m scanner fb-login.
   # Same searches as Bazoš; location and radius come from the FB account settings. Listings from cities
@@ -71,6 +99,7 @@ pricing:
   offer_below_max_pct: 5
   max_price_pct: 90           # candidate if price <= 90 % of market ...
   min_price_pct: 40           # ... and >= 40 % (below: "too_cheap", almost always scam or broken)
+  foreign_min_price_pct: 55   # Vinted sellers abroad: below 55 % is "too_cheap" (scams, iCloud-locked phones)
   stale_days: 14              # older listings: flag "stale" + score penalty
   discount_cap_pct: 45        # discount above this adds no more score
   bundle_accessory_pct: 50    # extra controllers in a console bundle add 50 % of their price list price

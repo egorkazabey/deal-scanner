@@ -1,12 +1,13 @@
 # Deal Scanner
 
 A personal scanner for underpriced used electronics (iPhone, Apple Watch, AirPods, iPad, MacBook, consoles,
-graphics cards, ready-built PCs) on Bazoš and Sbazar, within 60 km of Ústí nad Orlicí, Czechia. It finds listings
+graphics cards, ready-built PCs) on Bazoš and Sbazar, within 60 km of Ústí nad Orlicí, Czechia, and on Vinted
+(shipped, the whole country and foreign sellers). It finds listings
 below market price, gets a second opinion from Gemini and sends them to Telegram with a ready-made
 message for the seller (in Czech).
 
 ```
-Bazoš, Sbazar (FB optional) → SQLite → rules (knowledge/prices.json) → Gemini → Telegram
+Bazoš, Sbazar, Vinted (FB optional) → SQLite → rules (knowledge/prices.json) → Gemini → Telegram
 ```
 
 The bot's interface is in Russian; button and command names below are quoted as they appear in the bot.
@@ -122,6 +123,23 @@ Sbazar counts the radius from the Ústí nad Orlicí district, so `radius_km: 30
 covers with 60 km. Bazoš category searches (graficka) have no Sbazar category: `sbazar.queries` maps them
 to a text query. `sbazar.enabled: false` switches it off; `/status` shows the last Sbazar run.
 
+## Vinted
+
+Vinted.cz runs the same searches as Bazoš, at most every `vinted.interval_min` (20) minutes, in the Bazoš
+run right after Sbazar (`vinted:` in config.yaml). No login is needed. Vinted has no radius: it ships, and
+about 90 % of what vinted.cz shows comes from sellers in Poland, Slovakia, Hungary, ... with prices converted
+to CZK (`vinted.foreign: false` keeps Czech sellers only). So the rules count what you would pay:
+price + Vinted's buyer protection (5 % + 18 Kč, given by Vinted) + shipping (`shipping_czk` /
+`shipping_abroad_czk`). The ceiling ("максимум") is for the asking price with that already taken off, and the
+alert shows the sum ("📦 … = … Kč") and "🌍 из-за рубежа" for foreign sellers. A foreign listing below 55 % of
+the market is "too cheap" (`pricing.foreign_min_price_pct`): those are mostly scams or iCloud-locked phones.
+`vinted.catalogs` limits each search to a Vinted category (phones, consoles, ...), so "iphone" does not
+bring phone cases. Buy only through Vinted's own button (that is where the buyer protection is).
+
+If Vinted answers with an anti-bot page or captcha, the bot does not try to get around it: it stops Vinted,
+says so in Telegram and waits for the "🔁 Проверить Vinted" button (also on `/status`). Vinted's terms do not
+allow automated access, so keep the interval long and the pages few.
+
 ## Facebook Marketplace (optional)
 
 Facebook has no public Marketplace API and automating it is against its rules: the account may get
@@ -171,9 +189,11 @@ python -m scanner evaluate --all        # re-evaluate the database after a price
 python -m scanner price-report          # the price report (= /prices)
 python -m scanner fb-login              # log in to Facebook by hand (profile in fb_profile/)
 python -m scanner run-once --source sbazar --dry  # one Sbazar scan without sending
+python -m scanner run-once --source vinted --dry  # one Vinted scan without sending
 python -m scanner run-once --source fb --dry  # one Facebook scan without sending
 python -m scanner fb-worker             # Facebook only, for a home PC next to the hosted bot
 python -m scanner save-fixtures         # refresh the test HTML when Bazoš changes its layout
+python -m scanner save-fixtures --source vinted  # the same for Vinted (pages trimmed to ~30 KB)
 pytest
 ```
 

@@ -11,7 +11,7 @@ from scanner.models import Listing
 from scanner.pc import PcSpecs, PcValuation, breakdown_lines
 from scanner.pricing import Evaluation
 
-SOURCE_NAMES = {"bazos": "Bazoš", "sbazar": "Sbazar", "fb": "FB"}
+SOURCE_NAMES = {"bazos": "Bazoš", "sbazar": "Sbazar", "fb": "FB", "vinted": "Vinted"}
 VERDICT_EMOJI = {"buy": "🟢", "negotiate": "🟡", "skip": "🔴"}
 NO_AI_EMOJI = "⚪"
 TELEGRAM_LIMIT = 4096
@@ -35,6 +35,20 @@ def age_words(posted: date | None, today: date) -> str:
     if days == 1:
         return "вчера"
     return f"{days} дн. назад"
+
+
+def _where(listing: Listing, today: date) -> str:
+    return ", ".join(x for x in (SOURCE_NAMES.get(listing.source, listing.source), listing.location,
+                                 "🌍 из-за рубежа" if listing.foreign else None,
+                                 age_words(listing.posted_date, today)) if x)
+
+
+def cost_line(listing: Listing) -> list[str]:
+    """Vinted: what the buyer pays on top of the asking price."""
+    if not listing.extra_cost or listing.price is None:
+        return []
+    return [f"📦 {kc(listing.price)} + ochrana и доставка {kc(listing.extra_cost)} = "
+            f"{kc(listing.price + listing.extra_cost)} Kč"]
 
 
 def liquidity_dots(liquidity: int) -> str:
@@ -83,8 +97,9 @@ def _flags(review: Review, today: date) -> list[str]:
 
 
 def fallback_message(listing: Listing, offer: int | None) -> str:
-    """Seller message without Gemini, by the KNOWLEDGE.md template."""
-    price = f" Šlo by to za {offer} Kč při osobním předání?" if offer else ""
+    """Seller message without Gemini, by the KNOWLEDGE.md template (Vinted ships: no personal handover)."""
+    handover = "" if listing.source == "vinted" else " při osobním předání"
+    price = f" Šlo by to za {offer} Kč{handover}?" if offer else ""
     return f"Dobrý den, je inzerát ještě aktuální?{price} Děkuji."
 
 
@@ -99,16 +114,17 @@ def format_alert(
     offer, max_price = offer_and_max(review)
     emoji = _emoji(review)
     drop = f"📉 {kc(old_price)} → " if kind in {"drop", "watch"} and old_price else ""
-    where = ", ".join(x for x in (SOURCE_NAMES.get(listing.source, listing.source), listing.location,
-                                  age_words(listing.posted_date, today)) if x)
+    where = _where(listing, today)
 
     lines = [f"{emoji} {drop}<b>{escape(_model(review))} — {kc(price)} Kč</b>  ({escape(where)})"]
     if kind == "watch":
         lines.insert(0, "🔁 Цена снизилась (ты просил сообщить)")
     elif kind == "drop":
         lines.insert(0, "📉 Снижение цены")
+    lines += cost_line(listing)
     lines.append(f"Рынок ~{kc(market)} · предложить {kc(offer)} · максимум {kc(max_price)}")
     if market is not None and price is not None and offer is not None and max_price is not None:
+        market -= listing.extra_cost  # what is left of the market price after the Vinted fee and shipping
         worst, best = market - min(price, max_price), market - offer
         profit = kc(best) if worst >= best else f"{kc(worst)}–{kc(best)}"
         lines.append(f"Прибыль ~{profit} · ликвидность {liquidity_dots(item.liquidity)}")
@@ -147,15 +163,16 @@ def format_pc_alert(
     price, market, offer, max_price = listing.price, ev.market_price, ev.offer_price, ev.max_price
     emoji = "🟢" if price is not None and max_price is not None and price <= max_price else "🟡"
     drop = f"📉 {kc(old_price)} → " if kind == "drop" and old_price else ""
-    where = ", ".join(x for x in (SOURCE_NAMES.get(listing.source, listing.source), listing.location,
-                                  age_words(listing.posted_date, today)) if x)
+    where = _where(listing, today)
     name = f"ПК {item.variant}" if item.variant else "ПК"
     lines = [f"🖥 {emoji} {drop}<b>{escape(name)} — {kc(price)} Kč</b>  ({escape(where)})"]
     if kind == "drop":
         lines.insert(0, "📉 Снижение цены")
     lines += [escape(line) for line in breakdown_lines(valuation)]
+    lines += cost_line(listing)
     lines.append(f"Рынок ~{kc(market)} · предложить {kc(offer)} · максимум {kc(max_price)}")
     if None not in (market, price, offer, max_price):
+        market -= listing.extra_cost
         worst, best = market - min(price, max_price), market - offer
         profit = kc(best) if worst >= best else f"{kc(worst)}–{kc(best)}"
         lines.append(f"Прибыль ~{profit} · ликвидность {liquidity_dots(item.liquidity)}")

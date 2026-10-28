@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS listings (
     posted_date  TEXT,
     description  TEXT,
     is_top       INTEGER NOT NULL DEFAULT 0,
+    extra_cost   INTEGER NOT NULL DEFAULT 0,
+    foreign_seller INTEGER NOT NULL DEFAULT 0,
+    brand        TEXT,
+    size         TEXT,
+    condition    TEXT,
     status       TEXT NOT NULL DEFAULT 'new'
                  CHECK (status IN ('new', 'alerted', 'hidden', 'contacted')),
     first_seen   TEXT NOT NULL,
@@ -197,6 +202,15 @@ CREATE TABLE IF NOT EXISTS price_changes (
 """
 
 
+_VINTED_COLUMNS = {
+    "extra_cost": "INTEGER NOT NULL DEFAULT 0",
+    "foreign_seller": "INTEGER NOT NULL DEFAULT 0",
+    "brand": "TEXT",
+    "size": "TEXT",
+    "condition": "TEXT",
+}
+
+
 class Status(StrEnum):
     NEW = "new"
     ALERTED = "alerted"
@@ -239,6 +253,9 @@ class Database:
                 self.conn.execute("ALTER TABLE listings ADD COLUMN gone_at TEXT")
             if "checked_at" not in cols:  # last detail page check of a "contacted" listing
                 self.conn.execute("ALTER TABLE listings ADD COLUMN checked_at TEXT")
+            for col, decl in _VINTED_COLUMNS.items():  # Vinted: cost on top of the price, item attributes
+                if col not in cols:
+                    self.conn.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
         if "source" not in {r["name"] for r in self.conn.execute("PRAGMA table_info(runs)")}:
             with self.conn:
                 self.conn.execute("ALTER TABLE runs ADD COLUMN source TEXT NOT NULL DEFAULT 'bazos'")
@@ -257,12 +274,14 @@ class Database:
             if row is None:
                 self.conn.execute(
                     """INSERT INTO listings (source, id, url, title, price, location, postal_code,
-                           posted_date, description, is_top, first_seen, last_seen)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           posted_date, description, is_top, extra_cost, foreign_seller, brand, size,
+                           condition, first_seen, last_seen)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         listing.source, listing.id, listing.url, listing.title, listing.price,
                         listing.location, listing.postal_code, _iso(listing.posted_date),
-                        listing.description, int(listing.is_top), ts, ts,
+                        listing.description, int(listing.is_top), listing.extra_cost, int(listing.foreign),
+                        listing.brand, listing.size, listing.condition, ts, ts,
                     ),
                 )
                 self._add_price(listing, ts)
@@ -271,11 +290,13 @@ class Database:
             self.conn.execute(
                 """UPDATE listings SET url = ?, title = ?, price = ?, location = ?, postal_code = ?,
                        posted_date = COALESCE(?, posted_date), description = COALESCE(?, description),
-                       is_top = ?, last_seen = ?
+                       is_top = ?, extra_cost = ?, foreign_seller = ?, brand = ?, size = ?,
+                       condition = ?, last_seen = ?
                    WHERE source = ? AND id = ?""",
                 (
                     listing.url, listing.title, listing.price, listing.location, listing.postal_code,
-                    _iso(listing.posted_date), listing.description, int(listing.is_top), ts,
+                    _iso(listing.posted_date), listing.description, int(listing.is_top), listing.extra_cost,
+                    int(listing.foreign), listing.brand, listing.size, listing.condition, ts,
                     listing.source, listing.id,
                 ),
             )
@@ -603,6 +624,11 @@ def _row_to_listing(r: sqlite3.Row) -> Listing:
         description=r["description"],
         postal_code=r["postal_code"],
         is_top=bool(r["is_top"]),
+        extra_cost=r["extra_cost"],
+        foreign=bool(r["foreign_seller"]),
+        brand=r["brand"],
+        size=r["size"],
+        condition=r["condition"],
         first_seen=datetime.fromisoformat(r["first_seen"]),
         last_seen=datetime.fromisoformat(r["last_seen"]),
     )

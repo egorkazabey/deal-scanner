@@ -11,6 +11,7 @@
   - gpu/macbook/pc: минимальная прибыль (market − max_price) не меньше 2 000 на всех ступенях
   - liquidity = 1: коэффициент ещё −0.04
   - max_price округлить вниз до 100
+  - extra_cost (Vinted: ochrana kupujících + doprava) платится сверху: max_price для цены объявления = max_price − extra_cost (вниз до 100), прибыль = market − цена − extra_cost
   - offer_price = min(0.92 × цена объявления, max_price − 5 %), округлить вниз до 100
 - Пример: Apple Watch Ultra 3, market 13 800, объявление 11 999 → max_price 11 700, offer_price 11 000.
 - Кандидат только при ожидаемой прибыли (market − цена) от 1 000 Kč, для ПК, видеокарт и MacBook от 2 000 Kč.
@@ -32,6 +33,13 @@
 - Тройки одинаковых объявлений (например Jablonec 15 Pro).
 - Цена < 55 % от рынка + «jen e-mail», «pouze zaslání», «platba předem», WhatsApp-only у новых аккаунтов, ссылки на «доставку».
 - Продажа «po dceři/synovi» сама по себе НЕ красный флаг.
+- Vinted: просьба оплатить мимо Vinted (převod, PayPal friends, Revolut), уйти в WhatsApp/Telegram/e-mail,
+  «pošlu jinou dopravou», ссылка на «свою» страницу оплаты/доставки — развод (scam_risk high). Покупка только
+  через кнопку Vinted (там защита покупателя). Флагманы из-за рубежа за 20–35 % рынка (iPhone 16 Pro 512 GB
+  за 3 000 Kč) — почти всегда развод или iCloud-лок. Правила: у зарубежного продавца цена < 55 % рынка =
+  too_cheap (`pricing.foreign_min_price_pct`), у чешского как обычно < 40 %.
+- Vinted: AirPods (особенно Pro 3 / Max) из-за рубежа по одинаковой цене у разных продавцов — почти всегда
+  подделки. Без фото серийного номера / чека scam_risk не ниже medium.
 
 ## Нормальные красные флаги (снижают оценку, но не мошенничество)
 - «Měl by někdo zájem o výměnu» — обмен, а не продажа.
@@ -68,6 +76,9 @@
 - iPhone: добавить «Byl telefon někdy v servisu (díly, baterie)? Jaká je kondice baterie?»
 - ПК: «Mohl byste napsat přesný model základní desky, zdroje a grafiky? Byla karta použitá na těžbu?»
 - Если «cena pevná»: «Rozumím. Mohl bych přijet hned a zaplatit hotově – šlo by [cíl] Kč?»
+- Vinted: личной встречи нет, цену предлагают кнопкой «Nabídnout cenu». Сообщение: «Dobrý den, [вопрос про
+  состояние / батарею]. Šlo by to za [nabídka] Kč?» Без «osobní předání» и «přijet». Иностранному продавцу
+  тоже по-чешски, коротко и просто.
 
 ## Техника парсинга (проверено вручную в Chrome, 10/2026)
 
@@ -95,6 +106,17 @@
 - Рубрики «graficka» на Sbazar нет, ищем текстом `graficka karta` (`sbazar.queries` в config.yaml).
 - Деталь: `https://www.sbazar.cz/inzerat/{seoName}`, в `<script type="application/ld+json">` объект `@type: Product` с `name`, `description` (HTML-сущности вроде `&quot;`), `offers.price`. Удалённое объявление отвечает 404.
 - Заголовок `Accept: text/html` уводит на автологин Seznam и стену согласия (cmp.seznam.cz). Шлём `Accept: */*` и редиректы за пределы sbazar.cz считаем ошибкой.
+
+### Vinted
+Проверено живыми запросами 28.10.2026 (без логина, антибота не было).
+- Поиск (HTML, Next.js): `https://www.vinted.cz/catalog?search_text=Q&catalog[]=ID&price_from=..&price_to=..&currency=CZK&order=newest_first&page=N`, 96 объявлений на страницу, максимум 10 страниц. Старый JSON API `/api/v2/catalog/items` отвечает 404.
+- Данные лежат в скриптах `self.__next_f.push([1, "..."])`. Склеить строки, найти `"items":{"items":[...]`, рядом `"pagination":{"current_page","total_pages",...}`.
+- Объявление: `productItem` = `id`, `title`, `url` (`/items/{id}-slug`), `price.amount` (строка, `"2964.74"`), `serviceFee` (ochrana kupujících = 5 % + 18 Kč), `totalItemPrice`, `isPromoted`, `user.isBusiness`, `itemBox.accessibilityLabel` = «…, Značka: X, Model: Y, Stav: Z, Velikost: N, цена, итог». Даты подачи и города в выдаче нет: дата = день, когда бот впервые увидел объявление.
+- Заграница: Vinted.cz подмешивает продавцов из PL/SK/HU/RO (~90 % выдачи), их цены пересчитаны в Kč с копейками. Целая цена (`13500.00`) = чешский продавец. Доставка в расчёте: `vinted.shipping_czk` (ČR) / `shipping_abroad_czk` (из-за рубежа) в config.yaml.
+- Категории (`catalog[]`): 3661 мобильные телефоны, 3035 смарт-часы, 3678 наушники, 3728 планшеты, 3580 ноутбуки, 3025 консоли, 3581 настольные ПК, 3602 видеокарты. Без категории поиск «iphone» приносит чехлы.
+- Состояние (Stav): Nový s visačkou, Nový bez visačky, Velmi dobrý, Dobrý, Uspokojivý.
+- Деталь: `https://www.vinted.cz/items/{id}-slug`, `<script type="application/ld+json">` Product: `name`, `description`, `offers.price`, `offers.availability` (`InStock`; другое = продано). Во flight-данных есть блоки `attributes` (бренд, модель, память, состояние), `summary` («Vystaveno před 28 minutami»), `user_info_header` (отзывы продавца). Несуществующее объявление отвечает 404.
+- Заголовок `Accept: text/html` работает. Сессия: сначала главная страница (cookie `access_token_web`, `anon_id`), потом поиск. Антибот (DataDome/Cloudflare, 403, редирект на captcha) не обходим: источник останавливается, бот присылает кнопку «Проверить Vinted».
 
 ### Facebook Marketplace
 - Нужен залогиненный браузер (Playwright persistent profile). Без логина выдача пустая или со стеной входа.

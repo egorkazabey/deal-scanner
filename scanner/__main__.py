@@ -15,7 +15,7 @@ from rich.table import Table
 from scanner import learn
 from scanner.bot import ScannerApp, send_pending
 from scanner.browser_setup import BrowserSetupError, ensure_chromium, use_browsers_dir
-from scanner.config import PROJECT_ROOT, Settings, load_config
+from scanner.config import PROJECT_ROOT, BazosSearch, Settings, load_config
 from scanner.db import Database
 from scanner.fb_worker import run_worker
 from scanner.gemini import GeminiReviewer, Review, Verdict, review_candidates
@@ -26,6 +26,9 @@ from scanner.pricing import Evaluation, PriceList, evaluate_many, rank
 from scanner.sources.bazos import BazosClient, build_search_url, parse_search_page
 from scanner.sources.facebook import FacebookClient
 from scanner.sources.sbazar import SbazarClient
+from scanner.sources.vinted import VintedClient, trim_detail_page, trim_search_page
+from scanner.sources.vinted import parse_search_page as parse_vinted_search_page
+from scanner.sources.vinted import search_url as vinted_search_url
 
 log = logging.getLogger("scanner")
 console = Console()
@@ -94,11 +97,13 @@ async def review_db(
             for e in picked:
                 db.delete_review(e.listing.source, e.listing.id)
         reviewer = GeminiReviewer(settings, cfg.gemini, cfg.pricing, prices, db)
-        async with BazosClient(cfg.bazos) as bazos, SbazarClient(cfg.sbazar, cfg.bazos.searches) as sbazar:
+        async with (BazosClient(cfg.bazos) as bazos, SbazarClient(cfg.sbazar, cfg.bazos.searches) as sbazar,
+                    VintedClient(cfg.vinted, cfg.bazos.searches) as vinted):
             async def fetch_detail(url: str):  # each listing from its own site
                 if "facebook.com" in url:
                     raise RuntimeError("FB detail pages only from the bot / fb-worker")
-                return await (sbazar if "sbazar.cz" in url else bazos).fetch_detail(url)
+                client = sbazar if "sbazar.cz" in url else vinted if "vinted.cz" in url else bazos
+                return await client.fetch_detail(url)
 
             reviews = await review_candidates(picked, reviewer, db, prices, cfg.pricing, fetch_detail)
         _print_reviews(reviews, reviewer, as_json)
@@ -272,6 +277,25 @@ def _fmt_price(price: int | None) -> str:
     return "—" if price is None else f"{price:,}".replace(",", " ")
 
 
+async def save_vinted_fixtures(settings: Settings) -> None:
+    """Real Vinted pages, trimmed (a result page is ~3.5 MB): a phone search, a sneaker search, 1 detail."""
+    cfg = load_config(settings.config_path)
+    phones = next(s for s in cfg.bazos.searches if s.name == "iphone")
+    sneakers = BazosSearch(name="nike dunk", section="pc", query="nike dunk low")
+    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    async with VintedClient(cfg.vinted, []) as client:
+        page = await client.get(vinted_search_url(phones, cfg.vinted))
+        (FIXTURES_DIR / "vinted_search.html").write_text(trim_search_page(page), encoding="utf-8")
+        listings, _ = parse_vinted_search_page(page, cfg.vinted)
+        page = await client.get(vinted_search_url(sneakers, cfg.vinted))
+        (FIXTURES_DIR / "vinted_search_fashion.html").write_text(trim_search_page(page, 10), encoding="utf-8")
+        target = next((l for l in listings if not l.foreign), listings[0])
+        page = await client.get(target.url)
+        (FIXTURES_DIR / "vinted_detail.html").write_text(trim_detail_page(page), encoding="utf-8")
+    console.print(f"Saved Vinted fixtures to {FIXTURES_DIR} (detail: {target.url}). The tests expect the "
+                  "listings of the old ones: update tests/test_vinted.py with the new ids.")
+
+
 async def save_fixtures(settings: Settings) -> None:
     """Save real HTML (1 query search page, 1 category page, 1 detail) for parser tests."""
     cfg = load_config(settings.config_path)
@@ -346,6 +370,8 @@ def make_client(settings: Settings, cfg, source: str, headless: bool | None = No
                               state_path=settings.fb_state_path)
     if source == "sbazar":
         return SbazarClient(cfg.sbazar, cfg.bazos.searches)
+    if source == "vinted":
+        return VintedClient(cfg.vinted, cfg.bazos.searches)
     return BazosClient(cfg.bazos)
 
 
@@ -356,8 +382,8 @@ def main() -> None:
 
     p_run = sub.add_parser("run-once", help="run all searches once")
     p_run.add_argument("--dry", action="store_true", help="no notifications, only print to console")
-    p_run.add_argument("--source", choices=["bazos", "sbazar", "fb"], default="bazos",
-                       help="sbazar: Sbazar.cz; fb: Facebook Marketplace (log in first with fb-login)")
+    p_run.add_argument("--source", choices=["bazos", "sbazar", "vinted", "fb"], default="bazos",
+                       help="sbazar: Sbazar.cz; vinted: Vinted.cz; fb: Facebook Marketplace (log in first with fb-login)")
     sub.add_parser("fb-login", help="open a visible browser and log in to Facebook by hand (saved in fb_profile/)")
     sub.add_parser("fb-worker", help="Facebook only, no Telegram polling: for a home PC next to the hosted bot")
     p_run.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
@@ -383,7 +409,8 @@ def main() -> None:
     p_eval.add_argument("--days", type=float, default=2, help="listings seen in the last N days")
     p_eval.add_argument("--all", action="store_true", help="also show matched listings that are not candidates")
 
-    sub.add_parser("save-fixtures", help="save real Bazoš HTML into tests/fixtures")
+    p_fix = sub.add_parser("save-fixtures", help="save real Bazoš (or Vinted) HTML into tests/fixtures")
+    p_fix.add_argument("--source", choices=["bazos", "vinted"], default="bazos")
     sub.add_parser("price-report", help="price list proposals from the observations (what /prices shows)")
 
     args = parser.parse_args()
@@ -417,7 +444,7 @@ def main() -> None:
         finally:
             db.close()
     elif args.command == "save-fixtures":
-        asyncio.run(save_fixtures(settings))
+        asyncio.run(save_vinted_fixtures(settings) if args.source == "vinted" else save_fixtures(settings))
 
 
 if __name__ == "__main__":

@@ -109,6 +109,26 @@ class SbazarConfig(BaseModel):
     user_agent: str = BazosConfig.model_fields["user_agent"].default
 
 
+class VintedConfig(BaseModel):
+    """Vinted.cz: the same searches as Bazoš, scanned right after Sbazar. No radius: Vinted ships across
+    the country and mixes in foreign sellers (prices converted to CZK), so the cost of a listing is its
+    price + Vinted's buyer protection fee + shipping."""
+
+    enabled: bool = True
+    interval_min: int = 20  # at most one Vinted run per 20 min (in the Bazoš tick, after Sbazar)
+    pages: int = 2  # result pages per search (96 listings each, newest first, mostly foreign sellers)
+    delay_min: float = 2.0
+    delay_max: float = 5.0
+    timeout: float = 30.0
+    retries: int = 3
+    queries: dict[str, str] = {}  # search name -> Vinted text (Bazoš category searches have no query)
+    catalogs: dict[str, list[int]] = {}  # search name -> Vinted catalog ids (3661 = mobile phones)
+    shipping_czk: int = 79  # Czech seller: Zásilkovna / Balíkovna to a pickup point
+    shipping_abroad_czk: int = 160  # foreign seller (PL, SK, HU, ...): international shipping, estimate
+    foreign: bool = True  # false = only Czech sellers (whole-CZK prices)
+    user_agent: str = BazosConfig.model_fields["user_agent"].default
+
+
 class MaxPriceTier(BaseModel):
     """Buy ceiling for one market price band: max = min(market * pct %, market - min_margin)."""
 
@@ -153,6 +173,7 @@ class PricingConfig(BaseModel):
     offer_below_max_pct: int = 5  # ... and <= max price - 5 %, rounded down to 100
     max_price_pct: int = 90  # candidate: price <= market * 90 %
     min_price_pct: int = 40  # below that: "too_cheap" (scam or broken), not a candidate
+    foreign_min_price_pct: int = 55  # Vinted sellers abroad: cheap flagships there are mostly scams / locked
     stale_days: int = 14  # older listings get the "stale" flag and a score penalty
     discount_cap_pct: int = 45  # a bigger discount scores no higher (it is more likely a catch)
     bundle_accessory_pct: int = 50  # extra controllers in a console bundle add this % of their price
@@ -235,6 +256,7 @@ class LearnConfig(BaseModel):
 class AppConfig(BaseModel):
     bazos: BazosConfig = BazosConfig()
     sbazar: SbazarConfig = SbazarConfig()
+    vinted: VintedConfig = VintedConfig()
     pricing: PricingConfig = PricingConfig()
     facebook: FacebookConfig = FacebookConfig()
     gemini: GeminiConfig = GeminiConfig()

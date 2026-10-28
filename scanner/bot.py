@@ -42,6 +42,7 @@ from scanner.pipeline import run_scan
 from scanner.pricing import PriceList
 from scanner.sources.bazos import BazosClient
 from scanner.sources.sbazar import SbazarClient
+from scanner.sources.vinted import VintedBlocked, VintedClient
 from scanner.sources.facebook import FacebookClient, FbLoginRequired, valid_state
 
 log = logging.getLogger(__name__)
@@ -187,6 +188,7 @@ class ScannerApp:
         self.scheduler = AsyncIOScheduler(timezone=PRAGUE)
         self._scan_lock = asyncio.Lock()
         self._last_scan: datetime | None = None
+        self._last_vinted: datetime | None = None
         self._scan_task: asyncio.Task | None = None
         self._fb_lock = asyncio.Lock()
         self._fb_task: asyncio.Task | None = None
@@ -226,6 +228,11 @@ class ScannerApp:
         clients = [lambda: BazosClient(cfg.bazos)] if cfg.bazos.enabled else []
         if cfg.sbazar.enabled:
             clients.append(lambda: SbazarClient(cfg.sbazar, cfg.bazos.searches))
+        if cfg.vinted.enabled and self.db.get_state("vinted_blocked") != "1" and (
+            self._last_vinted is None or now - self._last_vinted >= timedelta(minutes=cfg.vinted.interval_min) * 0.9
+        ):
+            self._last_vinted = now
+            clients.append(lambda: VintedClient(cfg.vinted, cfg.bazos.searches))
         for make in clients:  # one source after the other, never in parallel
             client = make()
             try:
@@ -233,6 +240,14 @@ class ScannerApp:
                     report = await run_scan(self.settings, cfg, self.db, client, quiet=quiet)
                 log.info("run %s: %d listings, %d candidates, %d alerts", client.source, report.listings,
                          report.candidates, len(report.alerts))
+            except VintedBlocked as exc:
+                log.error("vinted: %s", exc)
+                self.db.set_state("vinted_blocked", "1")
+                await self._notify(
+                    "⚠️ Vinted показал антибот-проверку (капча / блокировка). Vinted остановлен, ничего не обхожу.\n"
+                    "Открой vinted.cz в браузере с того же сервера/ПК или подожди пару часов, потом нажми кнопку.",
+                    InlineKeyboardMarkup(inline_keyboard=[[
+                        InlineKeyboardButton(text="🔁 Проверить Vinted", callback_data="a:vintedretry")]]))
             except Exception:  # noqa: BLE001 - one failed run must not stop the scheduler
                 log.exception("scan %s failed", getattr(client, "source", "?"))
         await self.deliver(quiet)
@@ -501,6 +516,9 @@ class ScannerApp:
                 self._kick()
             if action == "fbretry":
                 self._kick("fb")
+            if action == "vintedretry":
+                self._last_vinted = None
+                self._kick()
             await _edit(q, screen(name, *screen_args))
             await q.answer(toast)
 

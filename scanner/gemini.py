@@ -31,7 +31,9 @@ from scanner.config import GeminiConfig, PricingConfig, Settings
 from scanner.db import Database
 from scanner.models import Listing, ListingDetail
 from scanner.pc import PC_SYSTEM_PROMPT, PcSpecs
-from scanner.pricing import Evaluation, PriceList, evaluate, max_buy_price, max_price_rule_lines, offer_price
+from scanner.pricing import (
+    Evaluation, PriceList, asking_ceiling, evaluate, max_buy_price, max_price_rule_lines, offer_price,
+)
 from scanner.sources.bazos import BazosError
 
 log = logging.getLogger(__name__)
@@ -90,6 +92,13 @@ SYSTEM_PROMPT = """\
 - Язык: condition_notes, red_flags и reason_ru строго по-русски. Чешские фразы из объявления переводи,
   не копируй. Коротко.
 - reason_ru: 1–2 предложения.
+- listing.source = vinted: личной встречи нет, Vinted присылает посылкой. Сверху цены покупатель платит
+  listing.extra_cost (ochrana kupujících + doprava): прибыль = adjusted_market_price − цена − extra_cost,
+  а max_price из правила уменьши на extra_cost (тоже вниз до 100). seller_abroad=true: продавец за рубежом
+  (PL/SK/HU…), заголовок может быть не по-чешски, цена пересчитана в Kč. condition = состояние по шкале
+  Vinted; у электроники проверяй его по описанию. Просьба оплатить мимо Vinted, перейти в WhatsApp/e-mail
+  или отправить «своей» доставкой = scam_risk high. message_cs для Vinted без «osobní předání»,
+  торговаться будут кнопкой «Nabídnout cenu», поэтому сообщение — короткий вопрос про состояние и цену.
 - message_cs: первое сообщение продавцу по-чешски, на «vy», 2–3 коротких предложения, по шаблону
   из базы знаний, с ценой offer_price (именно это число). Без лишней вежливости и без эмодзи. Для iPhone спроси про
   батарею и сервис, для ПК/видеокарт про модели комплектующих и майнинг, если в описании этого нет.
@@ -116,9 +125,9 @@ class Review:
 
     @property
     def final_profit(self) -> int | None:
-        """Profit at the asking price, by the condition-adjusted market price."""
-        price, market = self.evaluation.listing.price, self.adjusted_market
-        return None if price is None or market is None else market - price
+        """Profit at the asking price (+ Vinted fee and shipping), by the condition-adjusted market price."""
+        listing, market = self.evaluation.listing, self.adjusted_market
+        return None if listing.price is None or market is None else market - listing.price - listing.extra_cost
 
     @property
     def notify(self) -> bool:
@@ -248,6 +257,8 @@ def build_prompt(ev: Evaluation, pricing: PricingConfig, today: date | None = No
             "offer_cap": offer_cap(listing.price, pricing),
             "offer_price": ev.offer_price,
             "location": listing.location,
+            **({"extra_cost": listing.extra_cost, "seller_abroad": listing.foreign, "brand": listing.brand,
+                "size": listing.size, "condition": listing.condition} if listing.source == "vinted" else {}),
             "posted_date": listing.posted_date.isoformat() if listing.posted_date else None,
             "age_days": age_days(ev, today),
             "description": listing.description or "(описания нет)",
@@ -274,7 +285,8 @@ def enforce_rules(v: Verdict, ev: Evaluation, today: date, pricing: PricingConfi
     assert price is not None and ev.match is not None
     v = v.model_copy(deep=True)
     item = ev.match.item
-    v.max_price = max_buy_price(max(0, v.adjusted_market_price), item.category, item.liquidity, pricing)
+    v.max_price = asking_ceiling(
+        max_buy_price(max(0, v.adjusted_market_price), item.category, item.liquidity, pricing), ev.listing)
     if v.verdict != "skip":
         if v.verdict == "buy" and price > v.max_price:
             v.verdict = "negotiate"

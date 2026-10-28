@@ -71,6 +71,7 @@ def normalize(text: str) -> str:
     for pattern, repl in _CYRILLIC:
         t = re.sub(pattern, repl, t)
     t = re.sub(r"(\d)\s*(?:[\"″”“]|''|′′|palc\w*|inch\w*)", r"\1 inch ", t)
+    t = t.replace("ł", "l")  # Polish (Vinted): NFKD does not decompose it
     t = unicodedata.normalize("NFKD", t)
     t = "".join(c for c in t if not unicodedata.combining(c))
     t = re.sub(r"(\d),(\d)", r"\1.\2", t)
@@ -581,23 +582,26 @@ class PriceList:
 _ACC_WORDS = (
     r"(?:obal\w*|kryt\w*|sklo|skla|tvrzen\w* sklo|folie|pouzdr\w*|remin\w*|pasek|pasky|nabijec\w*"
     r"|kabel\w*|adapter\w*|krabic\w*|hra|hry|hru|her|drzak\w*|stojan\w*|dock\w*|nahradni dil\w*"
-    r"|baterie|displej\w*|lcd|stylus|pencil|klavesnic\w*|keyboard|chladic\w*|ventilator\w*)"
+    r"|baterie|displej\w*|lcd|stylus|pencil|klavesnic\w*|keyboard|chladic\w*|ventilator\w*"
+    r"|etui|case|obudow\w*|szklo|ladowar\w*|pudelk\w*|pokrowi\w*)"
 )
 _ACC_START_RE = re.compile(
     r"^(?:(?:prodam|prodej|nov\w*|original\w*|apple|luxusni|silikon\w*|kozen\w*|ochrann\w*"
     rf"|magnet\w*|magic|smart|\d+ ?x|sada|set)\s+)*{_ACC_WORDS}\b"
 )
-_ACC_FOR_RE = re.compile(rf"\b{_ACC_WORDS} (?:na|pro|k|ke|od)\b")
+_ACC_FOR_RE = re.compile(rf"\b{_ACC_WORDS} (?:na|pro|k|ke|od|do|for)\b")
 
 _STOP_RULES: list[tuple[str, re.Pattern[str]]] = [
-    ("koupím", re.compile(r"\b(?:koupim|sh?anim|hledam|poptavam|vykupuji|vykup)\b")),
+    ("koupím", re.compile(r"\b(?:koupim|sh?anim|hledam|poptavam|vykupuji|vykup|kupim|kupie|szukam)\b")),
     ("výměna", re.compile(
         r"\bvymen\w* za\b|\bvymenim\b|\bvymenu\b(?! (?:baterie|displeje|skla|krytu))"
-        r"|\b(?:mozna|i|nebo) vymena\b")),
-    ("na díly", re.compile(r"\bna (?:dily|nahradni dily|nd)\b|\bnefunkc\w*")),
+        r"|\b(?:mozna|i|nebo) vymena\b|\bzamienie\b|\bzamiana\b")),
+    ("na díly", re.compile(
+        r"\bna (?:dily|nahradni dily|nd|diely|czesci)\b|\bnefunkc\w*|\buszkodzon\w*|\bniesprawn\w*"
+        r"|\bnie dziala\w*|\balkatresz\w*|\bhibas\w*|\bdefect\w*|\bdefekt\w*|\bbroken\b|\bfor parts\b")),
     ("blokovaný", re.compile(
-        r"\b(?:za)?blokovan\w*|\bmdm\b|\baktivacni zamek\b|\bactivation lock\b|\bzamcen\w*")),
-    ("prodáno", re.compile(r"\bprodan[oaey]\b|\brezerv\w*")),
+        r"\b(?:za)?blok(?:ov|ow)an\w*|\bmdm\b|\baktivacni zamek\b|\bactivation lock\b|\bzamcen\w*")),
+    ("prodáno", re.compile(r"\bprodan[oaey]\b|\brezerv\w*|\bsprzedan[oey]\b")),
 ]
 _ICLOUD_RE = re.compile(r"\bicloud\w*")
 _ICLOUD_OK_RE = re.compile(r"odhlas|vypnut|odpojen|\bbez\b|cist|free|\bneni\b|\bok\b|odemc")
@@ -699,6 +703,11 @@ def max_buy_price(market: int, category: str, liquidity: int, cfg: PricingConfig
     return max(0, min(market * pct // 100, market - margin) // 100 * 100)
 
 
+def asking_ceiling(max_price: int, listing: Listing) -> int:
+    """The buy ceiling for the asking price: max_price minus what is paid on top (Vinted fee + shipping)."""
+    return max(0, (max_price - listing.extra_cost) // 100 * 100) if listing.extra_cost else max_price
+
+
 def offer_price(asking: int, max_price: int, cfg: PricingConfig) -> int:
     """First offer: min(92 % of the asking price, max price - 5 %), rounded down to 100."""
     cap = asking * cfg.offer_cap_pct
@@ -724,6 +733,8 @@ def max_price_rule_lines(cfg: PricingConfig) -> list[str]:
                  f"{'/'.join(_kc(m) for m in margins)} на всех ступенях")
     lines.append(f"liquidity = 1: коэффициент ещё −{cfg.low_liquidity_pct_drop / 100:.2f}")
     lines.append("max_price округлить вниз до 100")
+    lines.append("extra_cost (Vinted: ochrana kupujících + doprava) платится сверху: max_price для цены "
+                 "объявления = max_price − extra_cost (вниз до 100), прибыль = market − цена − extra_cost")
     lines.append(f"offer_price = min({cfg.offer_cap_pct / 100:.2f} × цена объявления, "
                  f"max_price − {cfg.offer_below_max_pct} %), округлить вниз до 100")
     return lines
@@ -794,16 +805,18 @@ def evaluate(
     item = ev.match.item
     market = item.market_price + bundle_bonus(title, ev.match, prices, cfg)
     ev.market_price = market
-    ev.max_price = max_buy_price(market, item.category, item.liquidity, cfg)
+    # Vinted: the buyer pays protection + shipping on top, so the ceiling for the asking price is lower.
+    ev.max_price = asking_ceiling(max_buy_price(market, item.category, item.liquidity, cfg), listing)
     if listing.price is None:
         ev.flags.append("no_price")
         return ev
 
     price = listing.price
+    cost = price + listing.extra_cost
     ev.offer_price = offer_price(price, ev.max_price, cfg)
-    ev.discount_pct = 1 - price / market
-    ev.expected_profit = market - price
-    if price < market * cfg.min_price_pct / 100:
+    ev.discount_pct = 1 - cost / market
+    ev.expected_profit = market - cost
+    if price < market * (cfg.foreign_min_price_pct if listing.foreign else cfg.min_price_pct) / 100:
         ev.flags.append("too_cheap")
 
     city = _city(listing.location)
@@ -830,7 +843,7 @@ def evaluate(
         and "low_profit" not in ev.flags
         and not ev.too_cheap
         and not ev.scam_suspect
-        and price <= market * cfg.max_price_pct / 100
+        and cost <= market * cfg.max_price_pct / 100
     )
     ev.score = score(ev, cfg, today) if ev.is_candidate else 0
     return ev

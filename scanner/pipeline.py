@@ -29,7 +29,8 @@ from scanner.pc import Components, PcSpecs, PcValuation, is_pc_build, pc_match, 
 from scanner.pricing import Evaluation, PriceList, evaluate, evaluate_many, normalize, rank
 from scanner.sources.bazos import BazosError
 
-HTTP_SOURCES = {"bazos", "sbazar"}  # sources whose detail pages answer 404/410 once a listing is deleted
+HTTP_SOURCES = {"bazos", "sbazar", "vinted"}  # detail pages answer 404/410 once a listing is deleted / sold
+UNDATED_SOURCES = {"fb", "vinted"}  # search results carry no posting date: the day first seen stands in
 
 log = logging.getLogger(__name__)
 
@@ -128,10 +129,14 @@ async def _scan(
     drops: dict[tuple[str, str], int] = {}
     for listing in result.listings:
         key = (listing.source, listing.id)
-        if listing.source == "fb" and (row := db.get(*key)) and row["posted_date"]:
-            # FB cards have no date (searched with daysSinceListed=1): keep the day it was first seen,
-            # or the listing would look new on every run and never become stale.
-            listing.posted_date = date.fromisoformat(row["posted_date"])
+        if listing.source in UNDATED_SOURCES:
+            # FB cards and Vinted results have no date: keep the day it was first seen, or the listing
+            # would look new on every run and never become stale.
+            row = db.get(*key)
+            if row and row["posted_date"]:
+                listing.posted_date = date.fromisoformat(row["posted_date"])
+            elif listing.posted_date is None:
+                listing.posted_date = today
         upsert = db.upsert(listing, started)
         if upsert.kind is UpsertKind.NEW:
             report.new += 1
