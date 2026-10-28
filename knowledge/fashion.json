@@ -1,0 +1,302 @@
+{
+ "meta": {
+  "currency": "CZK",
+  "market_price_meaning": "б/у в состоянии «Velmi dobrý», ходовой размер (кроссовки EU 40–46, одежда S–XL); другие состояния: pricing.fashion.condition_pct в config.yaml",
+  "source": "медиана цен объявлений Vinted.cz «Velmi dobrý» (1 страница newest, CZ + PL/SK/HU) × 0.95, 28.10.2026",
+  "brands": "brand / brands: что ищется в поле бренда Vinted или в заголовке; aliases: слова модели; exclude: слова, при которых позиция не подходит (Dunk Low без SB)"
+ },
+ "items": [
+  {
+   "kind": "sneakers",
+   "brand": "Nike",
+   "model": "Dunk Low",
+   "aliases": [
+    "dunk low",
+    "dunk lo"
+   ],
+   "exclude": [
+    "sb"
+   ],
+   "market_price": 850,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Nike",
+   "model": "SB Dunk Low",
+   "aliases": [
+    "sb dunk"
+   ],
+   "market_price": 1600,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Air Jordan",
+   "brands": [
+    "jordan",
+    "nike"
+   ],
+   "model": "1 High",
+   "aliases": [
+    "jordan 1 high",
+    "jordan 1 retro high",
+    "aj1 high",
+    "aj 1 high"
+   ],
+   "market_price": 1350,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Air Jordan",
+   "brands": [
+    "jordan",
+    "nike"
+   ],
+   "model": "1 Mid",
+   "aliases": [
+    "jordan 1 mid",
+    "aj1 mid",
+    "aj 1 mid"
+   ],
+   "market_price": 1000,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Air Jordan",
+   "brands": [
+    "jordan",
+    "nike"
+   ],
+   "model": "1 Low",
+   "aliases": [
+    "jordan 1 low",
+    "aj1 low",
+    "aj 1 low"
+   ],
+   "market_price": 1250,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Air Jordan",
+   "brands": [
+    "jordan",
+    "nike"
+   ],
+   "model": "4",
+   "aliases": [
+    "jordan 4",
+    "aj4",
+    "aj 4",
+    "jordan iv"
+   ],
+   "market_price": 1700,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "New Balance",
+   "brands": [
+    "new balance",
+    "nb"
+   ],
+   "model": "550",
+   "aliases": [
+    "550"
+   ],
+   "market_price": 750,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "New Balance",
+   "brands": [
+    "new balance",
+    "nb"
+   ],
+   "model": "2002R",
+   "aliases": [
+    "2002r",
+    "2002"
+   ],
+   "market_price": 1300,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "New Balance",
+   "brands": [
+    "new balance",
+    "nb"
+   ],
+   "model": "9060",
+   "aliases": [
+    "9060"
+   ],
+   "market_price": 1850,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Adidas",
+   "model": "Samba",
+   "aliases": [
+    "samba"
+   ],
+   "market_price": 1000,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Adidas Yeezy",
+   "brands": [
+    "yeezy",
+    "adidas"
+   ],
+   "model": "Boost 350",
+   "aliases": [
+    "yeezy boost 350",
+    "yeezy 350",
+    "350 v2",
+    "boost 350"
+   ],
+   "market_price": 1750,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "sneakers",
+   "brand": "Salomon",
+   "model": "XT-6",
+   "aliases": [
+    "xt-6",
+    "xt6"
+   ],
+   "market_price": 1850,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "The North Face",
+   "brands": [
+    "the north face",
+    "north face",
+    "tnf"
+   ],
+   "model": "Nuptse",
+   "aliases": [
+    "nuptse"
+   ],
+   "market_price": 2650,
+   "liquidity": 3,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "Arc'teryx",
+   "brands": [
+    "arcteryx",
+    "arc teryx"
+   ],
+   "model": "bunda",
+   "aliases": [
+    "bunda",
+    "kurtka",
+    "jacket",
+    "beta",
+    "atom",
+    "alpha",
+    "gamma"
+   ],
+   "market_price": 2800,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "Stone Island",
+   "model": "mikina",
+   "aliases": [
+    "mikina",
+    "bluza",
+    "hoodie",
+    "sweatshirt",
+    "crewneck",
+    "svetr",
+    "sweter",
+    "sweater"
+   ],
+   "market_price": 1550,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "Stone Island",
+   "model": "bunda",
+   "aliases": [
+    "bunda",
+    "kurtka",
+    "jacket",
+    "overshirt",
+    "vesta",
+    "kamizelka"
+   ],
+   "market_price": 4200,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "Carhartt",
+   "brands": [
+    "carhartt"
+   ],
+   "model": "bunda",
+   "aliases": [
+    "detroit",
+    "active jacket",
+    "bunda",
+    "kurtka",
+    "jacket"
+   ],
+   "market_price": 2100,
+   "liquidity": 2,
+   "confidence": "estimate"
+  },
+  {
+   "kind": "clothing",
+   "brand": "Patagonia",
+   "model": "fleece",
+   "aliases": [
+    "retro x",
+    "retro-x",
+    "synchilla",
+    "better sweater",
+    "fleece",
+    "polar",
+    "mikina",
+    "bunda",
+    "kurtka",
+    "jacket"
+   ],
+   "market_price": 1150,
+   "liquidity": 2,
+   "confidence": "estimate"
+  }
+ ]
+}

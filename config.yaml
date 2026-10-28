@@ -64,6 +64,25 @@ vinted:
   queries:                    # search name -> text for Vinted (Bazoš category searches have no query)
     graficka: "radeon"         # NVIDIA cards come from the rtx search
     herní pc: "pc"
+  fashion_searches:           # clothes and sneakers, priced by knowledge/fashion.json (1 page each)
+    - {name: "nike dunk low", query: "nike dunk low", price_min: 250, price_max: 950}
+    - {name: "nike sb dunk", query: "nike sb dunk", price_min: 500, price_max: 1750}
+    - {name: "jordan 1 high", query: "jordan 1 high", price_min: 400, price_max: 1500}
+    - {name: "jordan 1 mid", query: "jordan 1 mid", price_min: 300, price_max: 1100}
+    - {name: "jordan 1 low", query: "jordan 1 low", price_min: 400, price_max: 1400}
+    - {name: "jordan 4", query: "jordan 4", price_min: 500, price_max: 1850}
+    - {name: "new balance 550", query: "new balance 550", price_min: 200, price_max: 850}
+    - {name: "new balance 2002r", query: "new balance 2002r", price_min: 400, price_max: 1450}
+    - {name: "new balance 9060", query: "new balance 9060", price_min: 550, price_max: 2050}
+    - {name: "adidas samba", query: "adidas samba", price_min: 300, price_max: 1100}
+    - {name: "yeezy 350", query: "yeezy 350", price_min: 500, price_max: 1950}
+    - {name: "salomon xt-6", query: "salomon xt-6", price_min: 550, price_max: 2050}
+    - {name: "north face nuptse", query: "north face nuptse", price_min: 800, price_max: 2900}
+    - {name: "arcteryx", query: "arcteryx", price_min: 850, price_max: 3100}
+    - {name: "stone island mikina", query: "stone island mikina", price_min: 450, price_max: 1700}
+    - {name: "stone island bunda", query: "stone island bunda", price_min: 1250, price_max: 4600}
+    - {name: "carhartt detroit", query: "carhartt detroit", price_min: 650, price_max: 2300}
+    - {name: "patagonia", query: "patagonia", price_min: 350, price_max: 1250}
 
 facebook:
   # FB Marketplace, off by default (FB_ENABLED=true in .env). Log in once by hand: python -m scanner fb-login.
@@ -93,7 +112,15 @@ pricing:
     - {pct: 85, min_margin: 2000}                 # > 12 000
   low_liquidity_pct_drop: 4   # liquidity = 1: pct - 4 (70 -> 66, 78 -> 74, 85 -> 81)
   min_profit: 1000            # expected profit (market - price) below this: not a candidate
-  min_profit_by_category: {macbook: 2000, gpu: 2000, pc: 2000}  # also the ceiling's min margin in every band
+  min_profit_by_category: {macbook: 2000, gpu: 2000, pc: 2000, fashion: 400}  # also the ceiling's min margin in every band
+  max_price_tiers_by_category:  # own bands: clothes and sneakers (Vinted) have small prices and margins
+    fashion:
+      - {pct: 65, min_margin: 400}
+  fashion:                    # clothes and sneakers (knowledge/fashion.json, market = "Velmi dobrý", common size)
+    condition_pct: {"Nový s visačkou": 125, "Nový bez visačky": 110, "Velmi dobrý": 100, "Dobrý": 80, "Uspokojivý": 50}
+    shoe_sizes: [40, 46]      # EU sizes that sell fast; others: liquidity - 1
+    min_shoe_size: 36         # smaller = kids' shoes: not matched
+    clothing_sizes: [S, M, L, XL]  # others: liquidity - 1
   # First offer = min(offer_cap_pct % of the asking price, max_price - offer_below_max_pct %), down to 100
   offer_cap_pct: 92
   offer_below_max_pct: 5

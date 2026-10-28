@@ -39,6 +39,12 @@ Pipeline (built step by step, see PROMPTS.md):
   `asking_ceiling()` lowers max_price for the asking price; foreign sellers are too_cheap below
   `pricing.foreign_min_price_pct`. Anti-bot / captcha / 403 → `VintedBlocked`: never bypassed, the bot sets
   `vinted_blocked` and waits for the "Проверить Vinted" button. `vinted.catalogs` = category ids per search
+- `scanner/fashion.py`: clothes and sneakers (Vinted `vinted.fashion_searches`), price list `knowledge/fashion.json`
+  (loaded by `PriceList.load()` next to prices.json, `prices.fashion`). `FashionList.find()` = brand (Vinted brand
+  field or title) + model word, longest wins, `exclude` words; clothing items skip shoes/trousers/accessories,
+  kids' titles and sizes are skipped. `match()` adjusts market by Vinted condition (`pricing.fashion`), lowers
+  liquidity for uncommon sizes, returns a synthetic `Match` (category "fashion"); `evaluate()` tries it for listings
+  that are no device. Own ceiling: `pricing.max_price_tiers_by_category.fashion`. Not in learn's observations yet
 - `scanner/sources/facebook.py`: FB Marketplace on Playwright, off unless FB_ENABLED.
   Pure parsers (`parse_card`, `parse_detail_text`, `parse_price`, `nearby` = only configured cities, FB mixes
   in the whole country) + `FacebookClient` (persistent profile `fb_profile/`, sequential, human pauses, at
@@ -128,6 +134,7 @@ pytest
 ```
 README.md (English) is the user-facing guide: setup, hosting, bot commands, troubleshooting.
 `knowledge/components.json` holds used component prices for PC valuation (not prices.json).
+`knowledge/fashion.json` holds clothes / sneaker prices (Vinted), same rule: price changes go through the user.
 `data/` is runtime only (the DB; on the host a persistent volume is mounted there and hides its contents), so
 reference files live in `knowledge/`. The DB lives in `data/scanner.db` (gitignored). `--dry` still writes listings and Gemini reviews to the
 DB; it stores no alerts and sends nothing.

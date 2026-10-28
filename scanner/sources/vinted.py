@@ -24,7 +24,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
-from scanner.config import BazosSearch, VintedConfig
+from scanner.config import BazosSearch, VintedConfig, VintedSearch
 from scanner.models import Listing, ListingDetail
 from scanner.sources.bazos import RETRY_STATUSES, BazosError, ScanResult
 
@@ -51,10 +51,11 @@ class VintedBlocked(VintedError):
     """Anti-bot page or captcha: Vinted is stopped until the owner checks it, nothing is bypassed."""
 
 
-def search_url(search: BazosSearch, cfg: VintedConfig, page: int = 0) -> str:
+def search_url(search: BazosSearch | VintedSearch, cfg: VintedConfig, page: int = 0) -> str:
     """Search URL, newest first; `page` is 0-based. A Bazoš category search uses `queries` or its name."""
     params: list[tuple[str, Any]] = [("search_text", cfg.queries.get(search.name) or search.query or search.name)]
-    params += [("catalog[]", c) for c in cfg.catalogs.get(search.name, [])]
+    catalogs = getattr(search, "catalogs", None) or cfg.catalogs.get(search.name, [])
+    params += [("catalog[]", c) for c in catalogs]
     if search.price_min is not None:
         params.append(("price_from", search.price_min))
     if search.price_max is not None:
@@ -277,9 +278,9 @@ class VintedClient:
                 raise VintedBlocked(f"Vinted redirected to {urlsplit(url).hostname} (anti-bot / login)")
         raise VintedError(f"Vinted: too many redirects ({url})")
 
-    async def search(self, search: BazosSearch) -> list[Listing]:
+    async def search(self, search: BazosSearch | VintedSearch) -> list[Listing]:
         results: list[Listing] = []
-        for page in range(self.cfg.pages):
+        for page in range(getattr(search, "pages", None) or self.cfg.pages):
             listings, has_next = parse_search_page(await self.get(search_url(search, self.cfg, page)), self.cfg)
             log.debug("vinted %r page %d: %d listings", search.name, page + 1, len(listings))
             results.extend(listings)
@@ -288,14 +289,14 @@ class VintedClient:
         return results
 
     async def scan(self) -> ScanResult:
-        """Run all searches (the Bazoš ones); listings are deduplicated by id across searches.
+        """Run all searches (the Bazoš ones, then fashion_searches); listings are deduplicated by id.
 
         VintedBlocked stops the whole run (raised): the next searches would hit the same wall.
         """
         result = ScanResult()
         seen: set[str] = set()
         now = datetime.now()
-        for search in self.searches:
+        for search in [*self.searches, *self.cfg.fashion_searches]:
             try:
                 listings = await self.search(search)
             except VintedBlocked:

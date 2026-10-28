@@ -510,15 +510,17 @@ def _fmt_attr(attr: str, value: Any) -> str:
 
 
 class PriceList:
-    def __init__(self, items: list[PriceItem]):
+    def __init__(self, items: list[PriceItem], fashion: Any = None):
         self.items = items
+        self.fashion = fashion  # scanner.fashion.FashionList: clothes and sneakers (Vinted), or None
         self._by_model: dict[tuple[str, str], list[tuple[PriceItem, Identity]]] = {}
         for item in items:
             for ident in item.identities:
                 self._by_model.setdefault((ident.category, ident.model), []).append((item, ident))
 
     @classmethod
-    def load(cls, path: Path) -> PriceList:
+    def load(cls, path: Path, fashion_path: Path | None = None) -> PriceList:
+        """prices.json; fashion.json from `fashion_path` or next to it, when there is one."""
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         items = []
         for raw in data["items"]:
@@ -535,6 +537,10 @@ class PriceList:
                 if ident and ident.category == item.category:
                     item.identities.append(ident)
             items.append(item)
+        fashion_path = Path(fashion_path or Path(path).with_name("fashion.json"))
+        if fashion_path.exists():
+            from scanner.fashion import FashionList  # it imports this module
+            return cls(items, FashionList.load(fashion_path))
         return cls(items)
 
     def unmatched_items(self) -> list[PriceItem]:
@@ -602,6 +608,7 @@ _STOP_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("blokovaný", re.compile(
         r"\b(?:za)?blok(?:ov|ow)an\w*|\bmdm\b|\baktivacni zamek\b|\bactivation lock\b|\bzamcen\w*")),
     ("prodáno", re.compile(r"\bprodan[oaey]\b|\brezerv\w*|\bsprzedan[oey]\b")),
+    ("replika", re.compile(r"\brepli[ck]\w*|\bkopi[ea]\b|\bfake\b|\bnieoryginal\w*|\bpodrob\w*|\bneoriginal\w*")),
 ]
 _ICLOUD_RE = re.compile(r"\bicloud\w*")
 _ICLOUD_OK_RE = re.compile(r"odhlas|vypnut|odpojen|\bbez\b|cist|free|\bneni\b|\bok\b|odemc")
@@ -697,7 +704,7 @@ def is_accessory(text: str, ident: Identity | None) -> bool:
 
 def max_buy_price(market: int, category: str, liquidity: int, cfg: PricingConfig) -> int:
     """Buy ceiling from the market price band in config.yaml, rounded down to 100."""
-    tier = next(t for t in cfg.max_price_tiers if t.up_to is None or market <= t.up_to)
+    tier = next(t for t in cfg.tiers(category) if t.up_to is None or market <= t.up_to)
     pct = tier.pct - (cfg.low_liquidity_pct_drop if liquidity <= 1 else 0)
     margin = max(tier.min_margin, cfg.min_profit_by_category.get(category, 0))
     return max(0, min(market * pct // 100, market - margin) // 100 * 100)
@@ -717,18 +724,12 @@ def offer_price(asking: int, max_price: int, cfg: PricingConfig) -> int:
 
 def max_price_rule_lines(cfg: PricingConfig) -> list[str]:
     """The ceiling and offer rule in words (Russian), for the Gemini prompt and KNOWLEDGE.md."""
-    lines, prev = [], None
-    for t in cfg.max_price_tiers:
-        if prev is None:
-            band = f"market < {_kc(t.up_to + 1)}" if t.up_to is not None else "любой market"
-        elif t.up_to is None:
-            band = f"market > {_kc(prev)}"
-        else:
-            band = f"market {_kc(prev + 1)}–{_kc(t.up_to)}"
-        lines.append(f"{band}: max_price = min(market × {t.pct / 100:.2f}, market − {_kc(t.min_margin)})")
-        prev = t.up_to
-    cats = "/".join(sorted(cfg.min_profit_by_category))
-    margins = sorted(set(cfg.min_profit_by_category.values()))
+    lines = _tier_lines(cfg.max_price_tiers)
+    for category, tiers in sorted(cfg.max_price_tiers_by_category.items()):
+        lines += [f"{category}: {line}" for line in _tier_lines(tiers)]
+    own = {c: m for c, m in cfg.min_profit_by_category.items() if c not in cfg.max_price_tiers_by_category}
+    cats = "/".join(sorted(own))
+    margins = sorted(set(own.values()))
     lines.append(f"{cats}: минимальная прибыль (market − max_price) не меньше "
                  f"{'/'.join(_kc(m) for m in margins)} на всех ступенях")
     lines.append(f"liquidity = 1: коэффициент ещё −{cfg.low_liquidity_pct_drop / 100:.2f}")
@@ -737,6 +738,20 @@ def max_price_rule_lines(cfg: PricingConfig) -> list[str]:
                  "объявления = max_price − extra_cost (вниз до 100), прибыль = market − цена − extra_cost")
     lines.append(f"offer_price = min({cfg.offer_cap_pct / 100:.2f} × цена объявления, "
                  f"max_price − {cfg.offer_below_max_pct} %), округлить вниз до 100")
+    return lines
+
+
+def _tier_lines(tiers: list) -> list[str]:
+    lines, prev = [], None
+    for t in tiers:
+        if prev is None:
+            band = f"market < {_kc(t.up_to + 1)}" if t.up_to is not None else "любой market"
+        elif t.up_to is None:
+            band = f"market > {_kc(prev)}"
+        else:
+            band = f"market {_kc(prev + 1)}–{_kc(t.up_to)}"
+        lines.append(f"{band}: max_price = min(market × {t.pct / 100:.2f}, market − {_kc(t.min_margin)})")
+        prev = t.up_to
     return lines
 
 
@@ -780,11 +795,17 @@ def evaluate(
     listing: Listing, prices: PriceList, cfg: PricingConfig, today: date | None = None,
     match: Match | None = None,
 ) -> Evaluation:
-    """`match` skips the title matching: a ready-built PC valued from its components (scanner.pc)."""
+    """`match` skips the title matching: a ready-built PC valued from its components (scanner.pc).
+
+    Listings that are no device are looked up in the fashion price list (clothes, sneakers: scanner.fashion).
+    """
     ev = Evaluation(listing)
     title = normalize(listing.title)
     full = title + (" " + normalize(listing.description) if listing.description else "")
     ident = match.identity if match else identify(title)
+    if match is None and ident is None and prices.fashion is not None:
+        match = prices.fashion.match(listing, cfg.fashion)
+        ident = match.identity if match else None
 
     ev.stop = stop_reasons(full)
     if "výměna" in ev.stop and not exchange_only(title):

@@ -109,6 +109,17 @@ class SbazarConfig(BaseModel):
     user_agent: str = BazosConfig.model_fields["user_agent"].default
 
 
+class VintedSearch(BaseModel):
+    """A Vinted-only search (clothes, sneakers): text, optional categories, price range, pages."""
+
+    name: str
+    query: str
+    catalogs: list[int] = []
+    price_min: int | None = None
+    price_max: int | None = None
+    pages: int = 1
+
+
 class VintedConfig(BaseModel):
     """Vinted.cz: the same searches as Bazoš, scanned right after Sbazar. No radius: Vinted ships across
     the country and mixes in foreign sellers (prices converted to CZK), so the cost of a listing is its
@@ -126,6 +137,7 @@ class VintedConfig(BaseModel):
     shipping_czk: int = 79  # Czech seller: Zásilkovna / Balíkovna to a pickup point
     shipping_abroad_czk: int = 160  # foreign seller (PL, SK, HU, ...): international shipping, estimate
     foreign: bool = True  # false = only Czech sellers (whole-CZK prices)
+    fashion_searches: list[VintedSearch] = []  # clothes and sneakers, priced by knowledge/fashion.json
     user_agent: str = BazosConfig.model_fields["user_agent"].default
 
 
@@ -158,17 +170,34 @@ class FacebookConfig(BaseModel):
     radius_km: int = 60
 
 
+class FashionRules(BaseModel):
+    """How a fashion.json price is adjusted for one listing (scanner.fashion)."""
+
+    # market_price in fashion.json is for "Velmi dobrý"; other Vinted conditions are this % of it
+    condition_pct: dict[str, int] = {
+        "Nový s visačkou": 125, "Nový bez visačky": 110, "Velmi dobrý": 100, "Dobrý": 80, "Uspokojivý": 50,
+    }
+    shoe_sizes: tuple[float, float] = (40, 46)  # EU sizes that sell fast; others: liquidity - 1
+    min_shoe_size: float = 36  # smaller: kids' shoes, not matched
+    clothing_sizes: list[str] = ["S", "M", "L", "XL"]  # others (XS, XXL, ...): liquidity - 1
+
+
 class PricingConfig(BaseModel):
     prices_path: Path = PROJECT_ROOT / "knowledge" / "prices.json"
     components_path: Path = PROJECT_ROOT / "knowledge" / "components.json"  # used parts, for ready-built PCs
+    fashion_path: Path = PROJECT_ROOT / "knowledge" / "fashion.json"  # clothes and sneakers (Vinted)
     max_price_tiers: list[MaxPriceTier] = [
         MaxPriceTier(up_to=4999, pct=70, min_margin=1000),
         MaxPriceTier(up_to=12000, pct=78, min_margin=1200),
         MaxPriceTier(pct=85, min_margin=2000),
     ]
+    # Own ceiling bands for a category (fashion: no big margins, Vinted's buyer pays the fee)
+    max_price_tiers_by_category: dict[str, list[MaxPriceTier]] = {
+        "fashion": [MaxPriceTier(pct=65, min_margin=400)],
+    }
     low_liquidity_pct_drop: int = 4  # liquidity = 1: the tier's pct minus this
     min_profit: int = 1000  # expected profit below this: "low_profit", no candidate
-    min_profit_by_category: dict[str, int] = {"macbook": 2000, "gpu": 2000, "pc": 2000}  # also the ceiling margin
+    min_profit_by_category: dict[str, int] = {"macbook": 2000, "gpu": 2000, "pc": 2000, "fashion": 400}  # also the ceiling margin
     offer_cap_pct: int = 92  # first offer <= 92 % of the asking price ...
     offer_below_max_pct: int = 5  # ... and <= max price - 5 %, rounded down to 100
     max_price_pct: int = 90  # candidate: price <= market * 90 %
@@ -179,6 +208,7 @@ class PricingConfig(BaseModel):
     bundle_accessory_pct: int = 50  # extra controllers in a console bundle add this % of their price
     home_cities: list[str] = []  # score bonus +10
     near_cities: list[str] = []  # score bonus +6
+    fashion: FashionRules = FashionRules()
 
     @field_validator("max_price_tiers")
     @classmethod
@@ -187,6 +217,16 @@ class PricingConfig(BaseModel):
         if not tiers or bounds[-1] is not None or None in bounds[:-1] or bounds[:-1] != sorted(set(bounds[:-1])):
             raise ValueError("max_price_tiers: ascending up_to, the last tier without up_to")
         return tiers
+
+    @field_validator("max_price_tiers_by_category")
+    @classmethod
+    def _ordered_category_tiers(cls, by_cat: dict[str, list[MaxPriceTier]]) -> dict[str, list[MaxPriceTier]]:
+        for tiers in by_cat.values():
+            cls._ordered_tiers(tiers)
+        return by_cat
+
+    def tiers(self, category: str) -> list[MaxPriceTier]:
+        return self.max_price_tiers_by_category.get(category) or self.max_price_tiers
 
     def category_min_profit(self, category: str) -> int:
         return self.min_profit_by_category.get(category, self.min_profit)

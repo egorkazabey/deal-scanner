@@ -47,7 +47,7 @@ def record(db: Database, evaluations: list[Evaluation], now: datetime) -> int:
             if l.price is None or ev.stop or _SKIP_FLAGS & set(ev.flags):
                 continue
             if ev.match is not None:
-                if ev.match.confidence != "high" or ev.match.item.category == "pc":
+                if ev.match.confidence != "high" or ev.match.item.category in ("pc", "fashion"):
                     continue
                 db.conn.execute(
                     """INSERT INTO price_observations (source, listing_id, item, price, first_seen, last_seen)

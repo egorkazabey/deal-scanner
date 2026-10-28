@@ -2,7 +2,7 @@
 
 A personal scanner for underpriced used electronics (iPhone, Apple Watch, AirPods, iPad, MacBook, consoles,
 graphics cards, ready-built PCs) on Bazoš and Sbazar, within 60 km of Ústí nad Orlicí, Czechia, and on Vinted
-(shipped, the whole country and foreign sellers). It finds listings
+(shipped, the whole country and foreign sellers), where it also looks for branded clothes and sneakers. It finds listings
 below market price, gets a second opinion from Gemini and sends them to Telegram with a ready-made
 message for the seller (in Czech).
 
@@ -135,6 +135,19 @@ alert shows the sum ("📦 … = … Kč") and "🌍 из-за рубежа" for
 the market is "too cheap" (`pricing.foreign_min_price_pct`): those are mostly scams or iCloud-locked phones.
 `vinted.catalogs` limits each search to a Vinted category (phones, consoles, ...), so "iphone" does not
 bring phone cases. Buy only through Vinted's own button (that is where the buyer protection is).
+
+### Clothes and sneakers
+
+Vinted also runs `vinted.fashion_searches` (Nike Dunk, Jordan 1/4, New Balance 550/2002R/9060, Samba, Yeezy,
+Salomon XT-6, Nuptse, Arc'teryx, Stone Island, Carhartt, Patagonia; one page each). They are priced by
+`knowledge/fashion.json`: `market_price` is the used price in "Velmi dobrý" condition and a common size, taken
+from Vinted asking prices (estimates: correct them as you see real sales). The rules adjust it by the listing's
+Vinted condition (`pricing.fashion.condition_pct`, new with tags 125 % ... "Uspokojivý" 50 %), lower the
+liquidity for uncommon sizes and skip kids' things. Clothes have their own ceiling (`max_price_tiers_by_category`:
+65 % of market, at least 400 Kč profit). Fakes are the main risk: "replika", "1:1", "kopie" are stop words and
+Gemini asks the seller for a photo of the label. Moncler is left out on purpose: almost everything on Vinted is
+fake. To add a model, add an item to fashion.json (brand, model words, `exclude` words) and a search to
+config.yaml, then `pytest`. The weekly price report does not cover fashion.json yet.
 
 If Vinted answers with an anti-bot page or captcha, the bot does not try to get around it: it stops Vinted,
 says so in Telegram and waits for the "🔁 Проверить Vinted" button (also on `/status`). Vinted's terms do not

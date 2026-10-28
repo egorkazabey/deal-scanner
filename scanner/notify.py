@@ -81,7 +81,10 @@ def _flags(review: Review, today: date) -> list[str]:
         elif f in _FLAG_NAMES:
             out.append(_FLAG_NAMES[f])
     if ev.match and ev.match.confidence == "low":
-        out.append("вариант не указан: взят самый дешёвый")
+        if ev.match.item.category == "fashion":
+            out += ev.match.notes  # size / condition not given
+        else:
+            out.append("вариант не указан: взят самый дешёвый")
     if ev.match and ev.match.item.confidence == "estimate":
         out.append("цена прайса — оценка")
     if v:
